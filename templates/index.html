@@ -78,7 +78,7 @@
                         Importer une étiquette INCI
                     </h2>
                     <p class="card-desc">Glissez-déposez la photo du déodorant (ou de sa liste d'ingrédients) pour lancer le scan intelligent.</p>
-                    
+
                     <div class="upload-zone" id="dropZone">
                         <input type="file" id="fileInput" accept="image/*" class="file-input">
                         <div class="upload-prompt" id="uploadPrompt">
@@ -100,6 +100,21 @@
                         <div class="progress-status-row">
                             <span class="progress-status" id="progressStatus">Lecture de l'image...</span>
                             <span class="progress-percent" id="progressPercent">0%</span>
+                        </div>
+                    </div>
+
+                    <!-- Manual INCI text paste fallback -->
+                    <div class="manual-paste-section">
+                        <button class="btn-toggle-paste" id="btnTogglePaste" type="button">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19 2h-4.18C14.4.84 13.3 0 12 0c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm7 18H5V4h2v3h10V4h2v16z"/></svg>
+                            Ou collez la liste INCI manuellement
+                        </button>
+                        <div class="paste-area" id="pasteArea" style="display:none;">
+                            <textarea id="inciTextInput" placeholder="Collez ici la liste des ingrédients INCI (séparés par des virgules ou des sauts de ligne)&#10;&#10;Exemple :&#10;Aqua, Aluminum Chlorohydrate, Propylene Glycol, PPG-14 Butyl Ether, Fragrance, Cyclomethicone" rows="6"></textarea>
+                            <button class="btn btn-cyan btn-full" id="btnParseInci" type="button">
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="margin-right:6px;"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                                Analyser cette liste INCI
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -272,11 +287,15 @@
                                 <div class="charts-grid">
                                     <div class="chart-wrapper">
                                         <h4 class="chart-title">Répartition des Dangers (D)</h4>
-                                        <canvas id="dangerChart" height="200"></canvas>
+                                        <div class="chart-canvas-container">
+                                            <canvas id="dangerChart"></canvas>
+                                        </div>
                                     </div>
                                     <div class="chart-wrapper">
                                         <h4 class="chart-title">Répartition des Scores par Ingrédient</h4>
-                                        <canvas id="ingredientsScoreChart" height="200"></canvas>
+                                        <div class="chart-canvas-container">
+                                            <canvas id="ingredientsScoreChart"></canvas>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -287,7 +306,7 @@
                                     <h4 class="chart-title">Positionnement Comparatif (20 Déodorants)</h4>
                                     <p class="chart-desc">Score global (%) du produit actuel comparé à la base de données. Plus le score est faible, plus le produit est sûr.</p>
                                     <div class="compare-chart-wrapper">
-                                        <canvas id="compareBenchmarkChart" height="300"></canvas>
+                                        <canvas id="compareBenchmarkChart"></canvas>
                                     </div>
                                 </div>
                             </div>

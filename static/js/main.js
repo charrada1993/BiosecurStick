@@ -57,6 +57,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const editorList = document.getElementById('editorList');
     const btnCalculate = document.getElementById('btnCalculate');
 
+    // Manual INCI paste
+    const btnTogglePaste = document.getElementById('btnTogglePaste');
+    const pasteArea = document.getElementById('pasteArea');
+    const inciTextInput = document.getElementById('inciTextInput');
+    const btnParseInci = document.getElementById('btnParseInci');
+
     // Result Containers
     const welcomeResultCard = document.getElementById('welcomeResultCard');
     const resultLayout = document.getElementById('resultLayout');
@@ -122,7 +128,77 @@ document.addEventListener('DOMContentLoaded', () => {
     
     init();
 
+    // ─── MANUAL INCI PASTE SECTION ───────────────────────────────
+    btnTogglePaste.addEventListener('click', () => {
+        const isOpen = pasteArea.style.display !== 'none';
+        pasteArea.style.display = isOpen ? 'none' : 'flex';
+        btnTogglePaste.style.borderColor = isOpen ? 'var(--color-input-border)' : 'var(--color-accent-cyan)';
+        btnTogglePaste.style.color = isOpen ? 'var(--color-text-secondary)' : 'var(--color-accent-cyan)';
+    });
+
+    btnParseInci.addEventListener('click', () => {
+        const rawText = inciTextInput.value.trim();
+        if (!rawText) {
+            showToast('Veuillez coller une liste INCI avant d\'analyser.', 'warning');
+            return;
+        }
+        showToast('🔍 Analyse de la liste INCI en cours...', 'info', 3000);
+        matchOCRTextOnBackend(rawText);
+    });
+
+    // ─── OCR RAW TEXT MODAL ──────────────────────────────────────
+    function showOCRModal(rawText) {
+        // Remove existing modal if any
+        const existing = document.getElementById('ocrModalOverlay');
+        if (existing) existing.remove();
+
+        const overlay = document.createElement('div');
+        overlay.className = 'ocr-modal-overlay';
+        overlay.id = 'ocrModalOverlay';
+
+        overlay.innerHTML = `
+            <div class="ocr-modal">
+                <h3>📷 Texte extrait par l'OCR</h3>
+                <p class="ocr-modal-desc">
+                    L'OCR n'a pas pu identifier d'ingrédients INCI connus.
+                    Voici le texte brut extrait — copiez-le et collez-le dans
+                    la zone "Ou collez la liste INCI manuellement" après correction.
+                </p>
+                <textarea readonly>${rawText}</textarea>
+                <div class="ocr-modal-actions">
+                    <button class="btn btn-secondary" id="ocrModalCopyBtn" type="button">📋 Copier le texte</button>
+                    <button class="btn btn-primary" id="ocrModalPasteBtn" type="button">✏️ Éditer & Analyser</button>
+                    <button class="btn btn-danger btn-sm" id="ocrModalCloseBtn" type="button">Fermer</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+
+        document.getElementById('ocrModalCloseBtn').addEventListener('click', () => overlay.remove());
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+        document.getElementById('ocrModalCopyBtn').addEventListener('click', () => {
+            navigator.clipboard.writeText(rawText).then(() => {
+                showToast('✅ Texte copié dans le presse-papiers', 'success', 2000);
+            });
+        });
+
+        document.getElementById('ocrModalPasteBtn').addEventListener('click', () => {
+            overlay.remove();
+            // Open the paste area and fill it with the OCR text
+            pasteArea.style.display = 'flex';
+            inciTextInput.value = rawText;
+            inciTextInput.focus();
+            btnTogglePaste.style.borderColor = 'var(--color-accent-cyan)';
+            btnTogglePaste.style.color = 'var(--color-accent-cyan)';
+            // Scroll into view
+            btnTogglePaste.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+    }
+
     // ─── TAB NAVIGATION ──────────────────────────────────────────
+
     tabButtons.forEach(button => {
         button.addEventListener('click', () => {
             // Remove active class from all buttons
@@ -211,46 +287,190 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ─── CLIENT-SIDE TESSERACT OCR ─────────────────────────────────
-    function runOCR(file) {
-        progressContainer.style.display = 'block';
-        progressBar.style.width = '0%';
-        progressPercent.innerText = '0%';
-        progressStatus.innerText = 'Initialisation de l\'OCR...';
+    function showToast(message, type = 'info', duration = 4000) {
+        // Remove any existing toast
+        const existing = document.getElementById('ocrToast');
+        if (existing) existing.remove();
 
-        Tesseract.recognize(
-            file,
-            'fra+eng',
-            {
-                logger: m => {
-                    if (m.status === 'recognizing text') {
-                        const pct = Math.round(m.progress * 100);
-                        progressBar.style.width = pct + '%';
-                        progressPercent.innerText = pct + '%';
-                        progressStatus.innerText = `Lecture de l'étiquette : ${pct}%`;
-                    } else if (m.status === 'loading tesseract core') {
-                        progressStatus.innerText = 'Chargement du noyau OCR...';
-                    } else if (m.status === 'initializing api') {
-                        progressStatus.innerText = 'Préparation de la langue...';
+        const toast = document.createElement('div');
+        toast.id = 'ocrToast';
+        const colors = {
+            success: 'linear-gradient(135deg, #10b981, #059669)',
+            warning: 'linear-gradient(135deg, #f59e0b, #d97706)',
+            error:   'linear-gradient(135deg, #ef4444, #dc2626)',
+            info:    'linear-gradient(135deg, #06b6d4, #3b82f6)'
+        };
+        toast.style.cssText = `
+            position:fixed; top:80px; right:20px; z-index:99999;
+            background:${colors[type] || colors.info};
+            color:#fff; padding:14px 20px; border-radius:12px;
+            font-family:Inter,sans-serif; font-size:14px; font-weight:500;
+            box-shadow:0 8px 32px rgba(0,0,0,0.3);
+            max-width:320px; line-height:1.5;
+            animation: slideInToast 0.3s ease;
+        `;
+
+        // Add keyframes if not already present
+        if (!document.getElementById('toastStyle')) {
+            const style = document.createElement('style');
+            style.id = 'toastStyle';
+            style.textContent = `
+                @keyframes slideInToast {
+                    from { opacity:0; transform:translateX(40px); }
+                    to   { opacity:1; transform:translateX(0); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => { if (toast.parentNode) toast.remove(); }, duration);
+    }
+
+    // ─── IMAGE PREPROCESSING ────────────────────────────────────────
+    function preprocessImageForOCR(file) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            const url = URL.createObjectURL(file);
+
+            img.onload = () => {
+                URL.revokeObjectURL(url);
+
+                const canvas = document.createElement('canvas');
+
+                // Scale up: Tesseract needs ~300 DPI. Target min 2000px on longest side.
+                const maxSide = Math.max(img.width, img.height);
+                const scale = maxSide < 2000 ? Math.min(3, 2000 / maxSide) : 1;
+                canvas.width  = Math.round(img.width  * scale);
+                canvas.height = Math.round(img.height * scale);
+
+                const ctx = canvas.getContext('2d');
+
+                // Enable image smoothing for upscale quality
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                // ── Pixel-level processing ──────────────────────────
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const d = imageData.data;
+
+                // 1. Grayscale + contrast stretch
+                let minL = 255, maxL = 0;
+                for (let i = 0; i < d.length; i += 4) {
+                    const gray = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
+                    if (gray < minL) minL = gray;
+                    if (gray > maxL) maxL = gray;
+                }
+                const range = maxL - minL || 1;
+
+                for (let i = 0; i < d.length; i += 4) {
+                    // Grayscale
+                    const gray = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
+
+                    // Stretch contrast to full 0–255 range
+                    let stretched = ((gray - minL) / range) * 255;
+
+                    // Boost contrast around midpoint
+                    stretched = (stretched - 128) * 1.6 + 128;
+                    stretched = Math.max(0, Math.min(255, stretched));
+
+                    d[i] = d[i+1] = d[i+2] = Math.round(stretched);
+                }
+
+                ctx.putImageData(imageData, 0, 0);
+
+                // 2. Unsharp mask (simple version: blend with blurred copy)
+                const sharpCanvas = document.createElement('canvas');
+                sharpCanvas.width  = canvas.width;
+                sharpCanvas.height = canvas.height;
+                const sCtx = sharpCanvas.getContext('2d');
+
+                // Draw blurred version
+                sCtx.filter = 'blur(1px)';
+                sCtx.drawImage(canvas, 0, 0);
+                sCtx.filter = 'none';
+
+                const blurData = sCtx.getImageData(0, 0, sharpCanvas.width, sharpCanvas.height);
+                const sharpData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+                for (let i = 0; i < sharpData.data.length; i += 4) {
+                    // sharpen = original + amount * (original - blur)
+                    const amount = 1.2;
+                    for (let c = 0; c < 3; c++) {
+                        let val = sharpData.data[i+c] + amount * (sharpData.data[i+c] - blurData.data[i+c]);
+                        sharpData.data[i+c] = Math.max(0, Math.min(255, Math.round(val)));
                     }
                 }
-            }
-        ).then(({ data: { text } }) => {
-            progressStatus.innerText = 'Analyse terminée avec succès !';
-            setTimeout(() => {
-                progressContainer.style.display = 'none';
-            }, 1000);
-            
-            console.log('OCR text extracted:', text);
-            matchOCRTextOnBackend(text);
-        }).catch(err => {
-            console.error('OCR Error:', err);
-            progressStatus.innerText = `Erreur de scan : ${err.message || err}`;
-            alert('Une erreur est survenue lors de l\'analyse de l\'image.');
+                ctx.putImageData(sharpData, 0, 0);
+
+                // Return canvas as Blob
+                canvas.toBlob((blob) => resolve(blob), 'image/png');
+            };
+
+            img.onerror = () => {
+                URL.revokeObjectURL(url);
+                resolve(file); // fallback: use original
+            };
+
+            img.src = url;
         });
     }
 
+    function runOCR(file) {
+        progressContainer.style.display = 'block';
+        progressBar.style.width = '5%';
+        progressPercent.innerText = '5%';
+        progressStatus.innerText = '🖼️ Prétraitement de l\'image...';
+
+        preprocessImageForOCR(file).then((processedBlob) => {
+            progressBar.style.width = '15%';
+            progressPercent.innerText = '15%';
+            progressStatus.innerText = 'Initialisation du lecteur INCI...';
+
+            Tesseract.recognize(
+                processedBlob,
+                'fra+eng',
+                {
+                    tessedit_pageseg_mode: '6',
+                    tessedit_ocr_engine_mode: '1',
+                    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-,. /()',
+                    logger: m => {
+                        if (m.status === 'recognizing text') {
+                            const pct = Math.round(15 + m.progress * 85);
+                            progressBar.style.width = pct + '%';
+                            progressPercent.innerText = pct + '%';
+                            progressStatus.innerText = `🔍 Lecture des ingrédients INCI : ${pct}%`;
+                        } else if (m.status === 'loading tesseract core') {
+                            progressStatus.innerText = '⚙️ Chargement du moteur OCR...';
+                        } else if (m.status === 'initializing api') {
+                            progressStatus.innerText = '⚙️ Initialisation...';
+                        } else if (m.status === 'loading language traineddata') {
+                            progressStatus.innerText = '📚 Chargement des données linguistiques...';
+                        }
+                    }
+                }
+            ).then(({ data: { text } }) => {
+                progressStatus.innerText = '✓ Scan terminé — Identification des ingrédients...';
+                progressBar.style.width = '100%';
+                progressPercent.innerText = '100%';
+                console.log('OCR raw text:', text);
+                matchOCRTextOnBackend(text);
+                setTimeout(() => { progressContainer.style.display = 'none'; }, 1500);
+            }).catch(err => {
+                console.error('OCR Error:', err);
+                progressStatus.innerText = `Erreur de scan : ${err.message || err}`;
+                showToast(`Erreur OCR : ${err.message || 'Erreur inconnue'}`, 'error');
+            });
+        });
+    }
+
+
     async function matchOCRTextOnBackend(text) {
         try {
+            if (progressStatus) progressStatus.innerText = '🔍 Comparaison avec la base INCI...';
+
             const response = await fetch('/api/match_product', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -259,31 +479,59 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
 
             if (data.matched && data.product) {
-                // Exact product matched!
+                // Product matched in database — use stored pre-validated scores
                 const p = data.product;
-                alert(`Produit identifié : ${p.name}`);
-                loadProductData(p);
+                const extra = data.extra_ingredients || [];
+                const dbCount = p.ingredients ? p.ingredients.length : 0;
+                const extraCount = extra.length;
+
+                if (extraCount > 0) {
+                    showToast(
+                        `✅ Produit identifié : ${p.name} · ${dbCount} ingrédients DB + ${extraCount} supplémentaire${extraCount > 1 ? 's' : ''} détecté${extraCount > 1 ? 's' : ''} sur l'étiquette`,
+                        'success', 6000
+                    );
+                } else {
+                    showToast(`✅ Produit identifié : ${p.name} · Score : ${p.global_score}%`, 'success', 5000);
+                }
+
+                // Use stored scores (no recalculation) + optional extras
+                displayProductWithStoredScores(p, extra);
+
             } else if (!data.matched && data.ingredients && data.ingredients.length > 0) {
-                // Predefined product not found, but extracted ingredients
-                alert(`${data.ingredients.length} ingrédients ont été reconnus sur l'image.`);
+                // Ingredients extracted from OCR/text
+                const count = data.ingredients.length;
+                showToast(`✅ ${count} ingrédient${count > 1 ? 's' : ''} INCI identifié${count > 1 ? 's' : ''} — Calcul du score en cours...`, 'success', 5000);
+
                 activeProductName = "Formulation scannée (OCR)";
-                activeProductCat = "Personnalisé";
-                activeProductRef = "Scan image";
+                activeProductCat = "Analyse INCI";
+                activeProductRef = "Scan photo étiquette";
                 activeIngredients = data.ingredients.map(ing => ({
                     inci: ing.inci,
                     concentration: ing.concentration
                 }));
+
                 renderEditorList();
                 calculateAndDisplay();
+
             } else {
-                // None matched
-                alert(data.message || "Aucun produit ou ingrédient n'a pu être extrait. Veuillez sélectionner un produit ou éditer manuellement.");
+                // Nothing found — show modal with raw text so user can inspect & correct
+                showToast('⚠️ Aucun ingrédient reconnu — affichage du texte brut extrait.', 'warning', 5000);
+                if (text && text.trim().length > 20) {
+                    showOCRModal(text);
+                } else {
+                    // Auto-open the paste section so user can type manually
+                    pasteArea.style.display = 'flex';
+                    btnTogglePaste.style.borderColor = 'var(--color-accent-cyan)';
+                    btnTogglePaste.style.color = 'var(--color-accent-cyan)';
+                    if (text) inciTextInput.value = text;
+                }
             }
         } catch (error) {
             console.error('Error matching OCR text:', error);
-            alert('Erreur lors du traitement des résultats de l\'OCR par le serveur.');
+            showToast('Erreur de communication avec le serveur. Vérifiez que Flask est démarré.', 'error');
         }
     }
+
 
     // ─── PRODUCT SEARCH AUTOCOMPLETE ──────────────────────────────
     productSearchInput.addEventListener('input', () => {
@@ -344,18 +592,191 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    function loadProductData(product) {
+    // ─── DISPLAY PRODUCT USING PRE-VALIDATED DATABASE SCORES ─────────
+    // This replaces the old loadProductData+calculateAndDisplay() flow for
+    // matched database products. Using stored scores avoids the averaging bug
+    // (N/D ingredients pulling the global score to near zero).
+    async function displayProductWithStoredScores(product, extraIngredients = []) {
+        // ── Set editor state ──────────────────────────────────────────
         activeProductName = product.name;
-        activeProductCat = product.category;
-        activeProductRef = product.reference;
-        activeIngredients = product.ingredients.map(ing => ({
+        activeProductCat = product.category || 'N/D';
+        activeProductRef = product.reference || 'N/D';
+        activeIngredients = (product.ingredients || []).map(ing => ({
             inci: ing.inci,
             concentration: ing.concentration
         }));
-        
         renderEditorList();
-        calculateAndDisplay();
+
+        // ── Build result objects from stored database fields ───────────
+        const storedResults = (product.ingredients || []).map(ing => ({
+            inci:                  ing.inci,
+            role:                  ing.role || '-',
+            cas:                   ing.cas  || '',
+            concentration:         ing.concentration,
+            c_median:              ing.c_median || '',
+            d:                     ing.d !== undefined ? ing.d : 1,
+            justification_danger:  ing.justification_danger || '',
+            source_danger:         ing.source_danger || '',
+            noael:                 ing.noael || 'N/D',
+            source_noael:          ing.source_noael || '',
+            sed:                   ing.sed !== undefined ? ing.sed : 0,
+            calcul_sed:            ing.calcul_sed || '',
+            e:                     ing.e !== undefined ? ing.e : 0,
+            interp_e:              ing.interp_e || '',
+            ms:                    ing.ms !== undefined ? ing.ms : 'N/D',
+            interp_ms:             ing.interp_ms || '',
+            score:                 ing.score !== undefined ? ing.score : 'N/D'
+        }));
+
+        // ── Dynamically calculate any extra OCR-found ingredients ──────
+        let extraResults = [];
+        if (extraIngredients.length > 0) {
+            try {
+                const resp = await fetch('/api/calculate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ingredients: extraIngredients })
+                });
+                const extraData = await resp.json();
+                extraResults = extraData.ingredients || [];
+            } catch (e) {
+                console.error('Error calculating extra ingredients:', e);
+            }
+        }
+
+        // ── Determine global score ─────────────────────────────────────
+        let globalScore;
+        if (extraIngredients.length === 0) {
+            // Use the validated study score from the database
+            globalScore = parseFloat(product.global_score || 0);
+        } else {
+            // Recompute average over all ingredients (stored + extras)
+            let scoreSum = 0;
+            const allForAvg = [...storedResults, ...extraResults];
+            allForAvg.forEach(ing => {
+                if (ing.score !== 'N/D' && ing.score !== null && ing.score !== undefined) {
+                    scoreSum += parseFloat(ing.score);
+                }
+            });
+            globalScore = allForAvg.length > 0 ? scoreSum / allForAvg.length : 0;
+            globalScore = Math.round(globalScore * 100) / 100;
+        }
+
+        const allResults = [...storedResults, ...extraResults];
+
+        // ── Save for chart theme-switch redraws ────────────────────────
+        lastCalculatedIngredients = allResults;
+        lastCalculatedGlobalScore = globalScore;
+
+        // ── Show results layout ────────────────────────────────────────
+        welcomeResultCard.style.display = 'none';
+        resultLayout.style.display = 'block';
+
+        // ── Score ring ─────────────────────────────────────────────────
+        const circumference = 440;
+        scoreValue.innerText = `${globalScore.toFixed(2)}%`;
+        const offset = circumference * (1 - Math.min(globalScore, 100) / 100);
+        scoreRingFill.style.strokeDashoffset = offset;
+
+        // ── Safety badge & interpretation ──────────────────────────────
+        if (globalScore <= 30.0) {
+            safetyBadge.innerText = 'SÛR';
+            safetyBadge.style.color = 'var(--color-safe)';
+            safetyBadge.style.backgroundColor = 'var(--color-safe-bg)';
+            safetyBadge.style.borderColor = 'rgba(16, 185, 129, 0.2)';
+            scoreRingFill.style.stroke = 'var(--color-safe)';
+            resInterpText.innerText = 'Profil toxicologique sûr. Aucun ingrédient hautement préoccupant ou marge de sécurité insuffisante.';
+        } else if (globalScore <= 60.0) {
+            safetyBadge.innerText = 'VIGILANCE';
+            safetyBadge.style.color = 'var(--color-warning)';
+            safetyBadge.style.backgroundColor = 'var(--color-warning-bg)';
+            safetyBadge.style.borderColor = 'rgba(245, 158, 11, 0.2)';
+            scoreRingFill.style.stroke = 'var(--color-warning)';
+            resInterpText.innerText = 'Profil intermédiaire. Présence d\'ingrédients à surveiller (antiperspirants, allergènes ou conservateurs réglementés).';
+        } else {
+            safetyBadge.innerText = 'RISQUE ÉLEVÉ';
+            safetyBadge.style.color = 'var(--color-danger)';
+            safetyBadge.style.backgroundColor = 'var(--color-danger-bg)';
+            safetyBadge.style.borderColor = 'rgba(239, 68, 68, 0.2)';
+            scoreRingFill.style.stroke = 'var(--color-danger)';
+            resInterpText.innerText = 'Risque biologique élevé. Plusieurs marges de sécurité insuffisantes (MS < 30) ou ingrédients à fort danger (D = 3).';
+        }
+
+        // ── Product details ────────────────────────────────────────────
+        resProdName.innerText = activeProductName;
+        resProdCat.innerText  = activeProductCat;
+        resProdRef.innerText  = activeProductRef;
+        resNbIngr.innerText   = allResults.length;
+
+        // ── Recommendations ────────────────────────────────────────────
+        recContent.innerHTML = '';
+        const riskIngs = allResults.filter(ing => ing.d >= 2 || (ing.ms !== 'N/D' && parseFloat(ing.ms) < 100));
+        if (riskIngs.length > 0) {
+            riskIngs.forEach(ing => {
+                const isDanger = ing.d === 3 || (ing.ms !== 'N/D' && parseFloat(ing.ms) < 30);
+                const item = document.createElement('div');
+                item.className = `rec-item ${isDanger ? 'danger' : 'warning'}`;
+                const explanation = ing.justification_danger || 'Marge de sécurité critique détectée.';
+                const msDisplay = typeof ing.ms === 'number' ? ing.ms.toFixed(2) : ing.ms;
+                item.innerHTML = `
+                    <div>
+                        <div class="rec-item-title">${ing.inci} <span class="rec-badge ${isDanger ? 'bg-red' : 'bg-orange'}">${isDanger ? 'DANGER HAUT' : 'VIGILANCE'}</span></div>
+                        <div class="rec-item-desc">
+                            <strong>Rôle :</strong> ${ing.role} | <strong>CAS :</strong> ${ing.cas || 'N/A'}<br>
+                            <strong>Analyse :</strong> ${explanation}<br>
+                            <strong>Marge de Sécurité (MS) :</strong> ${msDisplay} (Seuil recommandé : ≥ 100).
+                        </div>
+                    </div>`;
+                recContent.appendChild(item);
+            });
+        } else {
+            recContent.innerHTML = `
+                <div class="rec-item" style="border-left-color:var(--color-safe);background:rgba(16,185,129,0.02);">
+                    <div>
+                        <div class="rec-item-title text-green">Aucun point de vigilance identifié</div>
+                        <div class="rec-item-desc">
+                            Tous les ingrédients de cette formulation présentent une marge de sécurité supérieure à 100 et un profil de danger modéré à nul.
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        // ── Detailed table ─────────────────────────────────────────────
+        tableBody.innerHTML = '';
+        allResults.forEach(ing => {
+            const tr = document.createElement('tr');
+            tr.className = (ing.d === 3 || (ing.ms !== 'N/D' && parseFloat(ing.ms) < 30))
+                ? 'row-danger'
+                : (ing.d === 2 || (ing.ms !== 'N/D' && parseFloat(ing.ms) < 100))
+                    ? 'row-warning'
+                    : 'row-safe';
+            const fSed   = typeof ing.sed   === 'number' ? ing.sed.toFixed(6)   : (ing.sed || '-');
+            const fMs    = typeof ing.ms    === 'number' ? ing.ms.toFixed(2)    : (ing.ms || 'N/D');
+            const fScore = typeof ing.score === 'number' ? `${ing.score.toFixed(2)}%` : (ing.score || 'N/D');
+            tr.innerHTML = `
+                <td class="td-ingr-name">${ing.inci}</td>
+                <td>${ing.role || '-'}</td>
+                <td>${ing.cas  || '-'}</td>
+                <td>${ing.concentration}</td>
+                <td class="bold text-center">${ing.d}</td>
+                <td>${fSed}</td>
+                <td class="text-center">${ing.e}</td>
+                <td>${ing.noael}</td>
+                <td class="bold">${fMs}</td>
+                <td class="bold text-orange">${fScore}</td>`;
+            tableBody.appendChild(tr);
+        });
+
+        // ── Charts ─────────────────────────────────────────────────────
+        buildCharts(allResults, globalScore);
     }
+
+    // Legacy wrapper kept for compatibility with the ingredient editor's "Calculate" button
+    function loadProductData(product) {
+        displayProductWithStoredScores(product, []);
+    }
+
+
 
     // ─── INGREDIENT EDITOR AUTOCOMPLETE ───────────────────────────
     newIngredientInput.addEventListener('input', () => {
@@ -698,7 +1119,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     backgroundColor: 'rgba(6, 182, 212, 0.6)',
                     borderColor: '#06b6d4',
                     borderWidth: 1.5,
-                    borderRadius: 4
+                    borderRadius: 4,
+                    maxBarThickness: 24
                 }]
             },
             options: {
@@ -767,7 +1189,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     backgroundColor: benchmarkColors,
                     borderColor: benchmarkBorders,
                     borderWidth: 1.5,
-                    borderRadius: 4
+                    borderRadius: 4,
+                    maxBarThickness: 16
                 }]
             },
             options: {

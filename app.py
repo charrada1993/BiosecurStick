@@ -167,91 +167,228 @@ def get_ingredients():
 @app.route('/api/match_product', methods=['POST'])
 def match_product():
     """
-    Fuzzy matches text from OCR to products in the database.
-    Also extracts any individual ingredients found in the text.
+    Multi-strategy OCR text → ingredient list extraction.
+    Strategy 1: Match predefined products by brand/name tokens.
+    Strategy 2: Split OCR text into comma/newline tokens and fuzzy-match each against the ingredient master list.
+    Strategy 3: Full-text substring scan as fallback.
     """
+    import unicodedata
+
+    def normalize(s):
+        """Lowercase, strip accents, remove non-alphanumeric except spaces/hyphens."""
+        s = s.lower().strip()
+        s = unicodedata.normalize('NFKD', s).encode('ascii', 'ignore').decode('utf-8')
+        return s
+
     data = request.json or {}
     text = data.get('text', '')
-    
+
     if not text:
         return jsonify({"matched": False, "message": "No text provided"}), 400
-        
-    # Clean OCR text
-    text_clean = text.lower().strip()
-    
-    # 1. Try to match predefined products
+
+    text_norm = normalize(text)
+    products = db.get("products", [])
+    master_ingredients = db.get("ingredients", {})
+
+    # ── STRATEGY 1: Product name matching ──────────────────────────────
     matched_product = None
     max_matches = 0
-    
-    products = db.get("products", [])
+
     for p in products:
-        p_name = p["name"].lower()
-        # Find matches based on terms (brand names like "sanex", "narta", "dove", "weleda", etc.)
-        # We can split the product name into tokens and check if they occur in the text
-        tokens = [t for t in re.split(r'\s+', p_name) if len(t) > 2 and t != "déodorant" and t != "deodorant"]
-        matches = sum(1 for token in tokens if token in text_clean)
-        
-        # If we match a substantial portion of the name
+        p_name_norm = normalize(p["name"])
+        tokens = [t for t in re.split(r'\s+', p_name_norm)
+                  if len(t) > 2 and t not in ("deodorant", "deo")]
+        matches = sum(1 for token in tokens if token in text_norm)
         if matches > 0 and matches > max_matches:
-            # Extra check for brand specificity
-            brand = p_name.split()[0] # e.g., sanex, narta, caudalie, ca'fresh (c'fresh), l'artisan
-            if brand in text_clean:
+            brand = p_name_norm.split()[0]
+            if brand in text_norm:
                 matched_product = p
                 max_matches = matches
-                
+
     if matched_product:
+        # Even when a product is matched, also scan OCR text for any extra ingredients
+        # not already present in the database record (label may list more than we stored).
+
+        # Build a lookup of database product's ingredient INCI names
+        db_ing_names = {normalize(ing["inci"]) for ing in matched_product.get("ingredients", [])}
+
+        # Build master ingredient lookup (same as Strategy 2)
+        ing_lookup = {}
+        for key, info in master_ingredients.items():
+            ing_lookup[normalize(key)] = (key, info)
+            inci_norm = normalize(info.get("inci", key))
+            if inci_norm not in ing_lookup:
+                ing_lookup[inci_norm] = (key, info)
+        sorted_lookup_keys = sorted(ing_lookup.keys(), key=len, reverse=True)
+
+        # Helper: find typical concentration
+        def get_conc_for_product(original_key, ing_info):
+            for p in products:
+                for ing in p["ingredients"]:
+                    if normalize(ing["inci"]) == normalize(ing_info.get("inci", original_key)):
+                        return ing["concentration"]
+            return "1-3%"
+
+        # Scan OCR tokens for extra ingredients
+        raw_tokens = re.split(r'[,;\n\r\.]+', text)
+        cleaned_tokens = [normalize(t) for t in raw_tokens if len(t.strip()) > 2]
+        extra_found_keys = set()
+        extra_ingredients = []
+
+        for token in cleaned_tokens:
+            token = token.strip()
+            if len(token) < 3:
+                continue
+
+            # Exact match
+            if token in ing_lookup:
+                original_key, info = ing_lookup[token]
+                inci_n = normalize(info["inci"])
+                if original_key not in extra_found_keys and inci_n not in db_ing_names:
+                    extra_found_keys.add(original_key)
+                    extra_ingredients.append({
+                        "inci": info["inci"],
+                        "concentration": get_conc_for_product(original_key, info)
+                    })
+                continue
+
+            # Prefix match
+            for lk in sorted_lookup_keys:
+                if lk.startswith(token) and len(token) >= max(4, len(lk) - 4):
+                    original_key, info = ing_lookup[lk]
+                    inci_n = normalize(info["inci"])
+                    if original_key not in extra_found_keys and inci_n not in db_ing_names:
+                        extra_found_keys.add(original_key)
+                        extra_ingredients.append({
+                            "inci": info["inci"],
+                            "concentration": get_conc_for_product(original_key, info)
+                        })
+                    break
+
+            # Substring match
+            for lk in sorted_lookup_keys:
+                if len(lk) >= 4 and lk in token:
+                    original_key, info = ing_lookup[lk]
+                    inci_n = normalize(info["inci"])
+                    if original_key not in extra_found_keys and inci_n not in db_ing_names:
+                        extra_found_keys.add(original_key)
+                        extra_ingredients.append({
+                            "inci": info["inci"],
+                            "concentration": get_conc_for_product(original_key, info)
+                        })
+                    break
+
         return jsonify({
             "matched": True,
             "match_type": "product",
-            "product": matched_product
+            "product": matched_product,
+            "extra_ingredients": extra_ingredients,  # OCR-found extras not in the database
+            "total_found": len(matched_product.get("ingredients", [])) + len(extra_ingredients)
         })
-        
-    # 2. If no product matched, try to extract ingredients from the OCR text
-    matched_ingredients = []
-    master_ingredients = db.get("ingredients", {})
-    
-    # Sort ingredients by length descending to match longer names first (e.g. "Aluminum Chlorohydrate" before "Alum")
-    sorted_ingredients = sorted(master_ingredients.items(), key=lambda x: len(x[0]), reverse=True)
-    
-    # We will search the text for ingredient names
-    # Note: text clean can have commas, line breaks, etc.
+
+
+    # ── STRATEGY 2: Token-by-token ingredient extraction ───────────────
+    # Split OCR text on commas, semicolons, newlines, and dots
+    raw_tokens = re.split(r'[,;\n\r\.]+', text)
+    # Clean each token
+    cleaned_tokens = [normalize(t) for t in raw_tokens if len(t.strip()) > 2]
+
+    # Build a lookup: normalized_key → (original_key, ing_info)
+    ing_lookup = {}
+    for key, info in master_ingredients.items():
+        ing_lookup[normalize(key)] = (key, info)
+        # Also index by normalized INCI name
+        inci_norm = normalize(info.get("inci", key))
+        if inci_norm not in ing_lookup:
+            ing_lookup[inci_norm] = (key, info)
+
+    # Sort lookup keys longest-first (greedy matching)
+    sorted_lookup_keys = sorted(ing_lookup.keys(), key=len, reverse=True)
+
     found_keys = set()
-    for key, ing_info in sorted_ingredients:
-        # Check if the ingredient name exists as a word/phrase in the text
-        # Simple word boundary or pattern match
-        pattern = r'\b' + re.escape(key) + r'\b'
-        # Some chemical names have dashes or numbers, so a simple \b check might be strict,
-        # but let's check sub-strings with word boundaries where appropriate.
-        if re.search(pattern, text_clean) or key in text_clean:
-            if key not in found_keys:
-                found_keys.add(key)
-                # Assign a default concentration based on typical values for that ingredient
-                # We search if this ingredient exists in our database, and check its typical concentration.
-                # Find all occurrences of this ingredient in the DB and get the average or typical concentration.
-                con_str = "1-3%" # default fallback
-                for p in products:
-                    for ing in p["ingredients"]:
-                        if ing["inci"].lower().strip() == key:
-                            con_str = ing["concentration"]
-                            break
-                            
+    matched_ingredients = []
+
+    def get_typical_concentration(original_key, ing_info):
+        """Find the most common concentration for this ingredient across all products."""
+        for p in products:
+            for ing in p["ingredients"]:
+                if normalize(ing["inci"]) == normalize(ing_info.get("inci", original_key)):
+                    return ing["concentration"]
+        return "1-3%"
+
+    def try_match_token(token):
+        """Try to match a single OCR token to an ingredient using multiple strategies."""
+        token = token.strip()
+        if len(token) < 3:
+            return
+
+        # a) Exact match
+        if token in ing_lookup:
+            original_key, info = ing_lookup[token]
+            if original_key not in found_keys:
+                found_keys.add(original_key)
                 matched_ingredients.append({
-                    "inci": ing_info["inci"],
-                    "concentration": con_str
+                    "inci": info["inci"],
+                    "concentration": get_typical_concentration(original_key, info)
                 })
-                
+            return
+
+        # b) Prefix match (OCR may cut off the end)
+        for lk in sorted_lookup_keys:
+            if lk.startswith(token) and len(token) >= max(4, len(lk) - 4):
+                original_key, info = ing_lookup[lk]
+                if original_key not in found_keys:
+                    found_keys.add(original_key)
+                    matched_ingredients.append({
+                        "inci": info["inci"],
+                        "concentration": get_typical_concentration(original_key, info)
+                    })
+                return
+
+        # c) Substring match (for short database keys contained inside a longer OCR token)
+        for lk in sorted_lookup_keys:
+            if len(lk) >= 4 and lk in token:
+                original_key, info = ing_lookup[lk]
+                if original_key not in found_keys:
+                    found_keys.add(original_key)
+                    matched_ingredients.append({
+                        "inci": info["inci"],
+                        "concentration": get_typical_concentration(original_key, info)
+                    })
+                return
+
+    # Try each individual OCR token
+    for token in cleaned_tokens:
+        try_match_token(token)
+
+    # ── STRATEGY 3: Full-text scan fallback ────────────────────────────
+    # If token-matching gave few results, also do a full-text substring scan
+    if len(matched_ingredients) < 3:
+        for lk in sorted_lookup_keys:
+            if len(lk) < 4:
+                continue
+            original_key, info = ing_lookup[lk]
+            if original_key in found_keys:
+                continue
+            if lk in text_norm:
+                found_keys.add(original_key)
+                matched_ingredients.append({
+                    "inci": info["inci"],
+                    "concentration": get_typical_concentration(original_key, info)
+                })
+
     if matched_ingredients:
-        # Sort by typical concentration descending or keep order
         return jsonify({
             "matched": False,
             "match_type": "ingredients",
-            "ingredients": matched_ingredients
+            "ingredients": matched_ingredients,
+            "total_found": len(matched_ingredients)
         })
-        
+
     return jsonify({
         "matched": False,
         "match_type": "none",
-        "message": "Aucun produit ou ingrédient n'a été reconnu. Veuillez sélectionner ou saisir les ingrédients manuellement."
+        "message": "Aucun ingrédient reconnu dans l'image. Essayez une photo plus nette ou sélectionnez un produit manuellement."
     })
 
 @app.route('/api/calculate', methods=['POST'])
