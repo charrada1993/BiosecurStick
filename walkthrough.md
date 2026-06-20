@@ -74,10 +74,13 @@ Watch the complete visual verification session recording showing the app flow, a
 ---
 
 ## 🛠️ Verification Checklist Summary
-- **[x] Web App Runs locally** (Flask listening on `http://127.0.0.1:5000`)
-- **[x] Autocomplete Search works** (Fuzzy product search and selection)
-- **[x] Dynamic calculations verify** (Score matches exactly: `2.46%` for Sanex, updating to `2.60%` after adding `0.5% Limonene`)
-- **[x] Detailed Table tabulates results** (SED, NOAEL, MS, and Score visible)
-- **[x] Danger & Score Charts render** (Chart.js doughnut and bar charts function)
-- **[x] Benchmark compares global scores** (Horizontal bar ranking of the 20 products)
-- **[x] Custom formulation additions verify** (Adding or removing ingredients updates results)
+- [x] **Web App Runs locally** (Flask listening on `http://127.0.0.1:5000`)
+- [x] **Autocomplete Search works** (Fuzzy product search and selection)
+- [x] **Dynamic calculations verify** (Score matches exactly: `2.46%` for Sanex, updating to `2.60%` after adding `0.5% Limonene`)
+- [x] **Detailed Table tabulates results** (SED, NOAEL, MS, and Score visible)
+- [x] **Danger & Score Charts render** (Chart.js doughnut and bar charts function)
+- [x] **Benchmark compares global scores** (Horizontal bar ranking of the 20 products)
+- [x] **Custom formulation additions verify** (Adding or removing ingredients updates results)
+- [x] **Chart Layout Sizing Fixed** (Fixed responsiveness/height constraints on charts to prevent collapse/overflow and set maximum bar thickness)
+- [x] **Render Hosting Configurations Added** (Created `.gitignore`, `requirements.txt`, and `render.yaml` Blueprint for easy deployment)
+- [x] **Pushed code to GitHub** (Successfully pushed commit `968e28da` to the remote repository)
