@@ -1,11 +1,14 @@
 import os
 import json
 import re
-from flask import Flask, jsonify, request, render_template, send_from_directory
+import urllib.request
+import urllib.parse
+from flask import Flask, jsonify, request, render_template, send_from_directory, session, redirect, url_for
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "biosecurstick_secret_dev_key_2026")
 
-# Load database.json
+# Load local database.json
 DB_PATH = os.path.join(os.path.dirname(__file__), 'database.json')
 
 def load_db():
@@ -15,6 +18,74 @@ def load_db():
     return {"products": [], "ingredients": {}}
 
 db = load_db()
+
+# Firebase RTDB Configurations
+FIREBASE_URL = os.environ.get("FIREBASE_DB_URL", "https://biosecurstick-default-rtdb.europe-west1.firebasedatabase.app/").strip()
+if not FIREBASE_URL.endswith('/'):
+    FIREBASE_URL += '/'
+FIREBASE_SECRET = os.environ.get("FIREBASE_DB_SECRET", "tZRJsTNDBaYRMYjIDCYyVoHum4NyUa2kLlw0wL6y").strip()
+
+def firebase_request(path, method='GET', data=None):
+    if not FIREBASE_URL or "firebase" not in FIREBASE_URL:
+        return None
+    if path.startswith('/'):
+        path = path[1:]
+    
+    url = f"{FIREBASE_URL}{path}.json"
+    if FIREBASE_SECRET:
+        url += f"?auth={FIREBASE_SECRET}"
+        
+    req = urllib.request.Request(url, method=method)
+    req.add_header('Content-Type', 'application/json')
+    
+    body = None
+    if data is not None:
+        body = json.dumps(data).encode('utf-8')
+        
+    try:
+        with urllib.request.urlopen(req, data=body, timeout=10) as response:
+            res_data = response.read().decode('utf-8')
+            return json.loads(res_data) if res_data else None
+    except Exception as e:
+        print(f"Firebase request failed ({method} {path}): {e}")
+        return None
+
+def dict_to_firebase_list(d):
+    return [{"key": k, **v} for k, v in d.items()]
+
+def firebase_list_to_dict(lst):
+    if not lst:
+        return {}
+    res = {}
+    for item in lst:
+        if item is not None and "key" in item:
+            key = item["key"]
+            res[key] = {k: v for k, v in item.items() if k != "key"}
+    return res
+
+def initialize_firebase_data():
+    try:
+        # Check if products exist in Firebase
+        products_in_fb = firebase_request('products')
+        ingredients_in_fb = firebase_request('ingredients_list')
+        
+        # If products are missing or empty, seed them from local DB
+        if not products_in_fb:
+            print("Seeding products to Firebase Realtime Database...")
+            firebase_request('products', method='PUT', data=db.get("products", []))
+            print("Products seeded successfully.")
+            
+        # If ingredients are missing or empty, seed them
+        if not ingredients_in_fb:
+            print("Seeding master ingredients list to Firebase Realtime Database...")
+            ing_list = dict_to_firebase_list(db.get("ingredients", {}))
+            firebase_request('ingredients_list', method='PUT', data=ing_list)
+            print("Ingredients seeded successfully.")
+    except Exception as e:
+        print(f"Error seeding Firebase data: {e}")
+
+# Try to initialize Firebase data at startup
+initialize_firebase_data()
 
 def parse_concentration_range(con_str):
     """
@@ -158,10 +229,21 @@ def index():
 
 @app.route('/api/products', methods=['GET'])
 def get_products():
+    fb_products = firebase_request('products')
+    if fb_products is not None:
+        if isinstance(fb_products, dict):
+            # If Firebase returns a dict (e.g. key-value pairs of products), extract values
+            return jsonify(list(fb_products.values()))
+        elif isinstance(fb_products, list):
+            # If Firebase returns a list, filter out any None placeholders (Firebase handles sparse arrays with nulls)
+            return jsonify([p for p in fb_products if p is not None])
     return jsonify(db.get("products", []))
 
 @app.route('/api/ingredients', methods=['GET'])
 def get_ingredients():
+    fb_ingredients = firebase_request('ingredients_list')
+    if fb_ingredients is not None:
+        return jsonify(firebase_list_to_dict(fb_ingredients))
     return jsonify(db.get("ingredients", {}))
 
 @app.route('/api/match_product', methods=['POST'])
@@ -187,8 +269,18 @@ def match_product():
         return jsonify({"matched": False, "message": "No text provided"}), 400
 
     text_norm = normalize(text)
-    products = db.get("products", [])
-    master_ingredients = db.get("ingredients", {})
+    # Load products and ingredients from Firebase if available
+    fb_products = firebase_request('products')
+    if fb_products is not None:
+        if isinstance(fb_products, dict):
+            products = list(fb_products.values())
+        elif isinstance(fb_products, list):
+            products = [p for p in fb_products if p is not None]
+    else:
+        products = db.get("products", [])
+
+    fb_ingredients = firebase_request('ingredients_list')
+    master_ingredients = firebase_list_to_dict(fb_ingredients) if fb_ingredients is not None else db.get("ingredients", {})
 
     # ── STRATEGY 1: Product name matching ──────────────────────────────
     matched_product = None
@@ -407,7 +499,8 @@ def calculate_score():
             "error": "Aucun ingrédient fourni"
         })
         
-    master_ingredients = db.get("ingredients", {})
+    fb_ingredients = firebase_request('ingredients')
+    master_ingredients = fb_ingredients if fb_ingredients is not None else db.get("ingredients", {})
     results = []
     
     total_score_sum = 0.0
@@ -441,6 +534,123 @@ def calculate_score():
         "ingredients": results
     })
 
+# ── AUTHENTICATION AND ADMIN DASHBOARD ROUTES ─────────────────────
+ADMIN_USER = os.environ.get("ADMIN_USER", "admin")
+ADMIN_PASS = os.environ.get("ADMIN_PASS", "admin123")
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        if username == ADMIN_USER and password == ADMIN_PASS:
+            session['role'] = 'admin'
+            session['username'] = username
+            return redirect(url_for('admin_dashboard'))
+        else:
+            return render_template('login.html', error="Identifiants invalides. Veuillez réessayer.")
+            
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+@app.route('/admin')
+def admin_dashboard():
+    if session.get('role') != 'admin':
+        return redirect(url_for('login'))
+    return render_template('admin.html')
+
+@app.route('/api/admin/add_product', methods=['POST'])
+def add_product():
+    if session.get('role') != 'admin':
+        return jsonify({"error": "Accès refusé. Administrateur uniquement."}), 403
+        
+    data = request.json or {}
+    name = data.get('name', '').strip()
+    category = data.get('category', 'Chimique').strip()
+    reference = data.get('reference', 'Standard').strip()
+    ingredients_input = data.get('ingredients', [])
+    
+    if not name or not ingredients_input:
+        return jsonify({"error": "Le nom du produit et la liste des ingrédients sont requis."}), 400
+        
+    # Get master list of ingredients from Firebase or local DB
+    fb_ingredients = firebase_request('ingredients')
+    master_ingredients = fb_ingredients if fb_ingredients is not None else db.get("ingredients", {})
+    
+    # Calculate scores for each ingredient automatically
+    calculated_ingredients = []
+    total_score_sum = 0.0
+    for ing in ingredients_input:
+        ing_name = ing.get('inci', '').strip()
+        concentration = ing.get('concentration', '1-3%').strip()
+        
+        calc_record = calculate_ingredient_scoring(ing_name, concentration, master_ingredients)
+        calculated_ingredients.append(calc_record)
+        
+        score_val = calc_record.get('score')
+        if score_val != "N/D" and score_val is not None:
+            total_score_sum += float(score_val)
+            
+    # Calculate overall global score
+    nb_ingredients = len(calculated_ingredients)
+    global_score = total_score_sum / nb_ingredients if nb_ingredients > 0 else 0.0
+    global_score = round(global_score, 2)
+    
+    # Interpretation
+    if global_score <= 30.0:
+        interpretation = "Sûr (0–30%)"
+    elif global_score <= 60.0:
+        interpretation = "Vigilance (31–60%)"
+    else:
+        interpretation = "Risque élevé (>60%)"
+        
+    new_product = {
+        "name": name,
+        "category": category,
+        "reference": reference,
+        "global_score": global_score,
+        "ingredients": calculated_ingredients,
+        "interpretation": interpretation
+    }
+    
+    # Load all existing products
+    fb_products = firebase_request('products')
+    if fb_products is not None:
+        if isinstance(fb_products, dict):
+            products_list = list(fb_products.values())
+        elif isinstance(fb_products, list):
+            products_list = [p for p in fb_products if p is not None]
+    else:
+        products_list = db.get("products", [])
+        
+    # Append the new calculated product
+    products_list.append(new_product)
+    
+    # Push back to Firebase RTDB
+    firebase_sync_success = True
+    if FIREBASE_URL and "firebase" in FIREBASE_URL:
+        res = firebase_request('products', method='PUT', data=products_list)
+        if res is None:
+            firebase_sync_success = False
+            
+    # Push back to local database.json
+    db["products"] = products_list
+    try:
+        with open(DB_PATH, 'w', encoding='utf-8') as f:
+            json.dump(db, f, indent=4, ensure_ascii=False)
+    except Exception as e:
+        print(f"Error saving new product locally to database.json: {e}")
+        
+    return jsonify({
+        "success": True,
+        "firebase_sync": firebase_sync_success,
+        "product": new_product
+    })
+
 if __name__ == '__main__':
-    # Start on standard port 5000
     app.run(debug=True, port=5000)
