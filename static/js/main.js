@@ -425,48 +425,104 @@ document.addEventListener('DOMContentLoaded', () => {
         progressStatus.innerText = '🖼️ Prétraitement de l\'image...';
 
         preprocessImageForOCR(file).then((processedBlob) => {
-            progressBar.style.width = '15%';
-            progressPercent.innerText = '15%';
-            progressStatus.innerText = 'Initialisation du lecteur INCI...';
+            progressBar.style.width = '20%';
+            progressPercent.innerText = '20%';
+            progressStatus.innerText = '☁️ Envoi vers Google Cloud Vision...';
 
-            Tesseract.recognize(
-                processedBlob,
-                'fra+eng',
-                {
-                    tessedit_pageseg_mode: '6',    // Uniform block of text
-                    tessedit_ocr_engine_mode: '1', // LSTM only (best accuracy)
-                    // NOTE: Do NOT set tessedit_char_whitelist — it silently drops
-                    // accented letters (é, è, ê, ë, etc.) and hyphens inside
-                    // INCI names like "PPG-15", breaking ingredient recognition.
-                    logger: m => {
-                        if (m.status === 'recognizing text') {
-                            const pct = Math.round(15 + m.progress * 85);
-                            progressBar.style.width = pct + '%';
-                            progressPercent.innerText = pct + '%';
-                            progressStatus.innerText = `🔍 Lecture des ingrédients INCI : ${pct}%`;
-                        } else if (m.status === 'loading tesseract core') {
-                            progressStatus.innerText = '⚙️ Chargement du moteur OCR...';
-                        } else if (m.status === 'initializing api') {
-                            progressStatus.innerText = '⚙️ Initialisation...';
-                        } else if (m.status === 'loading language traineddata') {
-                            progressStatus.innerText = '📚 Chargement des données linguistiques...';
-                        }
-                    }
+            // ── Build multipart form upload ─────────────────────────────
+            const formData = new FormData();
+            formData.append('image', processedBlob, 'label.png');
+
+            fetch('/api/ocr', {
+                method: 'POST',
+                body: formData
+            })
+            .then(async (response) => {
+                const data = await response.json();
+
+                // ── 503: API key not configured → fall back to Tesseract ─
+                if (response.status === 503) {
+                    console.warn('Google Vision API key not set — falling back to Tesseract.js');
+                    progressStatus.innerText = '⚙️ Clé Vision absente — Tesseract activé...';
+                    runOCRTesseractFallback(processedBlob);
+                    return;
                 }
-            ).then(({ data: { text } }) => {
-                progressStatus.innerText = '✓ Scan terminé — Identification des ingrédients...';
+
+                // ── Other server errors ───────────────────────────────────
+                if (!response.ok || data.error) {
+                    const errMsg = data.error || `HTTP ${response.status}`;
+                    progressStatus.innerText = `Erreur Vision API : ${errMsg}`;
+                    showToast(`Erreur OCR : ${errMsg}`, 'error');
+                    progressContainer.style.display = 'none';
+                    return;
+                }
+
+                // ── Success ───────────────────────────────────────────────
+                progressBar.style.width = '90%';
+                progressPercent.innerText = '90%';
+                progressStatus.innerText = `✓ ${data.words || 0} mots extraits — Identification des ingrédients...`;
+
+                console.log('Google Vision OCR text:', data.text);
+
                 progressBar.style.width = '100%';
                 progressPercent.innerText = '100%';
-                console.log('OCR raw text:', text);
-                matchOCRTextOnBackend(text);
+                matchOCRTextOnBackend(data.text || '');
                 setTimeout(() => { progressContainer.style.display = 'none'; }, 1500);
-            }).catch(err => {
-                console.error('OCR Error:', err);
-                progressStatus.innerText = `Erreur de scan : ${err.message || err}`;
-                showToast(`Erreur OCR : ${err.message || 'Erreur inconnue'}`, 'error');
+            })
+            .catch(err => {
+                console.error('OCR fetch error:', err);
+                progressStatus.innerText = `Erreur réseau : ${err.message}`;
+                showToast(`Erreur OCR : ${err.message || 'Erreur réseau'}`, 'error');
+                progressContainer.style.display = 'none';
             });
         });
     }
+
+    // ─── TESSERACT.JS FALLBACK (used when Google Vision key not set) ───────────
+    function runOCRTesseractFallback(processedBlob) {
+        if (typeof Tesseract === 'undefined') {
+            progressStatus.innerText = 'OCR indisponible. Configurez GOOGLE_VISION_API_KEY sur le serveur.';
+            showToast('Configurez la clé Google Vision API pour activer le scan photo.', 'warning', 8000);
+            progressContainer.style.display = 'none';
+            return;
+        }
+
+        progressBar.style.width = '25%';
+        progressPercent.innerText = '25%';
+        progressStatus.innerText = '⚙️ Initialisation Tesseract (mode fallback)...';
+
+        Tesseract.recognize(
+            processedBlob,
+            'fra+eng',
+            {
+                tessedit_pageseg_mode: '6',
+                tessedit_ocr_engine_mode: '1',
+                logger: m => {
+                    if (m.status === 'recognizing text') {
+                        const pct = Math.round(25 + m.progress * 75);
+                        progressBar.style.width = pct + '%';
+                        progressPercent.innerText = pct + '%';
+                        progressStatus.innerText = `🔍 Tesseract : ${pct}%`;
+                    } else if (m.status === 'loading tesseract core') {
+                        progressStatus.innerText = '⚙️ Chargement du moteur OCR...';
+                    } else if (m.status === 'loading language traineddata') {
+                        progressStatus.innerText = '📚 Chargement des données linguistiques...';
+                    }
+                }
+            }
+        ).then(({ data: { text } }) => {
+            progressStatus.innerText = '✓ Scan Tesseract terminé — Identification...';
+            progressBar.style.width = '100%';
+            progressPercent.innerText = '100%';
+            console.log('Tesseract fallback text:', text);
+            matchOCRTextOnBackend(text);
+            setTimeout(() => { progressContainer.style.display = 'none'; }, 1500);
+        }).catch(err => {
+            progressStatus.innerText = `Erreur Tesseract : ${err.message || err}`;
+            showToast(`Erreur OCR : ${err.message || 'Erreur inconnue'}`, 'error');
+        });
+    }
+
 
 
     async function matchOCRTextOnBackend(text) {

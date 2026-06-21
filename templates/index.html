@@ -15,7 +15,8 @@
         rel="stylesheet">
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Tesseract.js for Client-Side OCR -->
+    <!-- Tesseract.js — fallback OCR when Google Vision API key is not set -->
+    <!-- Primary OCR: server-side Google Cloud Vision API (/api/ocr) -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
     <!-- Stylesheets -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">

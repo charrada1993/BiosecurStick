@@ -1,6 +1,7 @@
 import os
 import json
 import re
+import base64
 try:
     from rapidfuzz import process as fuzz_process, fuzz
     RAPIDFUZZ_AVAILABLE = True
@@ -231,6 +232,90 @@ def calculate_ingredient_scoring(ing_name, concentration_str, master_ingredients
 @app.route('/')
 def index():
     return render_template('index.html')
+
+# ── GOOGLE CLOUD VISION OCR ENDPOINT ───────────────────────────────
+# Set GOOGLE_VISION_API_KEY in environment / Render env-vars.
+# Free tier: 1 000 text-detection units/month (more than enough for a demo).
+GOOGLE_VISION_API_URL = "https://vision.googleapis.com/v1/images:annotate"
+
+@app.route('/api/ocr', methods=['POST'])
+def ocr_image():
+    """
+    Receives a JPEG/PNG image upload, sends it to Google Cloud Vision
+    TEXT_DETECTION, and returns the raw extracted text.
+    Falls back with a clear error if the API key is not configured.
+    """
+    api_key = os.environ.get('GOOGLE_VISION_API_KEY', '').strip()
+    if not api_key:
+        return jsonify({
+            'error': 'Google Vision API key non configurée.',
+            'hint':  'Ajoutez GOOGLE_VISION_API_KEY dans les variables d\'environnement Render.',
+            'text': ''
+        }), 503
+
+    if 'image' not in request.files:
+        return jsonify({'error': 'Aucun fichier image reçu.'}), 400
+
+    image_file = request.files['image']
+    image_bytes = image_file.read()
+    if not image_bytes:
+        return jsonify({'error': 'Fichier image vide.'}), 400
+
+    # Encode image as base64 for the Vision API
+    image_b64 = base64.b64encode(image_bytes).decode('utf-8')
+
+    payload = {
+        'requests': [{
+            'image': {'content': image_b64},
+            'features': [{
+                'type': 'TEXT_DETECTION',
+                'maxResults': 1
+            }],
+            'imageContext': {
+                # French + English covers most cosmetic labels.
+                # 'la' (Latin) helps with INCI chemical names.
+                'languageHints': ['fr', 'en', 'la']
+            }
+        }]
+    }
+
+    url = f"{GOOGLE_VISION_API_URL}?key={api_key}"
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode('utf-8'),
+        method='POST'
+    )
+    req.add_header('Content-Type', 'application/json')
+
+    try:
+        with urllib.request.urlopen(req, timeout=15) as response:
+            result = json.loads(response.read().decode('utf-8'))
+
+        responses = result.get('responses', [])
+        if not responses:
+            return jsonify({'text': '', 'words': 0})
+
+        text_annotations = responses[0].get('textAnnotations', [])
+        error_obj = responses[0].get('error', None)
+        if error_obj:
+            return jsonify({'error': error_obj.get('message', 'Vision API error'), 'text': ''}), 502
+
+        if not text_annotations:
+            return jsonify({'text': '', 'words': 0})
+
+        # textAnnotations[0].description contains the full extracted text block
+        full_text = text_annotations[0].get('description', '')
+        word_count = len(full_text.split())
+        print(f'Vision OCR: extracted {word_count} words from image.')
+        return jsonify({'text': full_text, 'words': word_count})
+
+    except urllib.error.HTTPError as e:
+        body = e.read().decode('utf-8', errors='replace')
+        print(f'Vision API HTTP error {e.code}: {body}')
+        return jsonify({'error': f'Vision API error {e.code}: {body[:200]}', 'text': ''}), 502
+    except Exception as e:
+        print(f'Vision OCR unexpected error: {e}')
+        return jsonify({'error': str(e), 'text': ''}), 500
 
 @app.route('/api/products', methods=['GET'])
 def get_products():

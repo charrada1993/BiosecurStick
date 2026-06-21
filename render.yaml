@@ -7,3 +7,13 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.0
+      # ── Google Cloud Vision OCR ──────────────────────────────────
+      # Get your key: https://console.cloud.google.com/apis/credentials
+      # Enable: Cloud Vision API (free tier: 1 000 requests/month)
+      - key: GOOGLE_VISION_API_KEY
+        sync: false   # fill in the Render dashboard manually (keep secret)
+      # ── Firebase ────────────────────────────────────────────
+      - key: FIREBASE_DB_URL
+        sync: false
+      - key: FIREBASE_DB_SECRET
+        sync: false
