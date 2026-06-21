@@ -6332,6 +6332,45 @@
             "source_noael": "SCCS / CIR / ECHA REACH",
             "norme": "Naturel",
             "conformite": "Oui"
+        },
+        "aluminium chlorohydrate": {
+            "inci": "Aluminum Chlorohydrate",
+            "symbole": "Aluminum Chlorohydrate",
+            "cas": "12042-91-0",
+            "role": "Réduit transpiration",
+            "d": 2,
+            "justification_danger": "Réglementé UE ou allergène déclaré >0.001%",
+            "source_danger": "Règlement UE 1223/2009 / IFRA 49th Amendment",
+            "noael": 30.0,
+            "source_noael": "SCCS/1613/19 (2020)",
+            "norme": "UE ≤ 20%",
+            "conformite": "Oui"
+        },
+        "water": {
+            "inci": "Aqua",
+            "symbole": "Aqua",
+            "cas": "7732-18-5",
+            "role": "Solvant",
+            "d": 0,
+            "justification_danger": "GRAS / ECOCERT – aucune restriction réglementaire",
+            "source_danger": "FDA GRAS / CIR Safety.org / ISO 3696",
+            "noael": "N/D",
+            "source_noael": "SCCS / CIR / ECHA REACH",
+            "norme": "Eau potable",
+            "conformite": "Oui"
+        },
+        "alcohol denat": {
+            "inci": "Alcohol Denat.",
+            "symbole": "Alcohol Denat.",
+            "cas": "64-17-5",
+            "role": "Solvant/séchage",
+            "d": 0,
+            "justification_danger": "GRAS / ECOCERT – aucune restriction réglementaire",
+            "source_danger": "FDA GRAS / CIR Safety.org / ISO 3696",
+            "noael": 2000.0,
+            "source_noael": "CIR / ECHA REACH",
+            "norme": "UE autorisé",
+            "conformite": "Oui"
         }
     }
 }

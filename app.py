@@ -256,11 +256,32 @@ def match_product():
     """
     import unicodedata
 
+    # ── Common OCR / EU-vs-US spelling aliases ─────────────────────────
+    SPELLING_ALIASES = [
+        # EU 'aluminium' vs US 'aluminum' (very common on French labels)
+        ('aluminium', 'aluminum'),
+        # OCR often drops dots in abbreviations
+        ('alcohol denat ',  'alcohol denat.'),
+        ('tocopherol vit e', 'tocopherol (vit e)'),
+        # Fragrance variant spellings
+        ('fragrance',  'parfum'),
+        # Some labels use 'water' standalone
+        ('water',      'aqua'),
+    ]
+
     def normalize(s):
         """Lowercase, strip accents, remove non-alphanumeric except spaces/hyphens."""
         s = s.lower().strip()
         s = unicodedata.normalize('NFKD', s).encode('ascii', 'ignore').decode('utf-8')
         return s
+
+    def normalize_with_aliases(s):
+        """Normalize then apply EU/US spelling aliases so both spellings resolve."""
+        n = normalize(s)
+        for wrong, right in SPELLING_ALIASES:
+            if n == wrong or n == normalize(wrong):
+                return normalize(right)
+        return n
 
     data = request.json or {}
     text = data.get('text', '')
@@ -268,7 +289,7 @@ def match_product():
     if not text:
         return jsonify({"matched": False, "message": "No text provided"}), 400
 
-    text_norm = normalize(text)
+    text_norm = normalize_with_aliases(text)
     # Load products and ingredients from Firebase if available
     fb_products = firebase_request('products')
     if fb_products is not None:
@@ -323,7 +344,9 @@ def match_product():
 
         # Scan OCR tokens for extra ingredients
         raw_tokens = re.split(r'[,;\n\r\.]+', text)
-        cleaned_tokens = [normalize(t) for t in raw_tokens if len(t.strip()) > 2]
+        if len([t for t in raw_tokens if len(t.strip()) > 5]) <= 1:
+            raw_tokens = re.split(r'[,;\n\r\.\s]+', text)
+        cleaned_tokens = [normalize_with_aliases(t) for t in raw_tokens if len(t.strip()) > 2]
         extra_found_keys = set()
         extra_ingredients = []
 
@@ -332,7 +355,8 @@ def match_product():
             if len(token) < 3:
                 continue
 
-            # Exact match
+            # Exact match (apply alias normalization)
+            token = normalize_with_aliases(token)
             if token in ing_lookup:
                 original_key, info = ing_lookup[token]
                 inci_n = normalize(info["inci"])
@@ -382,8 +406,11 @@ def match_product():
     # ── STRATEGY 2: Token-by-token ingredient extraction ───────────────
     # Split OCR text on commas, semicolons, newlines, and dots
     raw_tokens = re.split(r'[,;\n\r\.]+', text)
+    # If the OCR gave us only 1 big chunk (no commas/newlines), also try space-splitting
+    if len([t for t in raw_tokens if len(t.strip()) > 5]) <= 1:
+        raw_tokens = re.split(r'[,;\n\r\.\s]+', text)
     # Clean each token
-    cleaned_tokens = [normalize(t) for t in raw_tokens if len(t.strip()) > 2]
+    cleaned_tokens = [normalize_with_aliases(t) for t in raw_tokens if len(t.strip()) > 2]
 
     # Build a lookup: normalized_key → (original_key, ing_info)
     ing_lookup = {}
@@ -414,6 +441,9 @@ def match_product():
         if len(token) < 3:
             return
 
+        # Apply alias normalization
+        token = normalize_with_aliases(token)
+
         # a) Exact match
         if token in ing_lookup:
             original_key, info = ing_lookup[token]
@@ -425,7 +455,7 @@ def match_product():
                 })
             return
 
-        # b) Prefix match (OCR may cut off the end)
+        # b) Prefix match (OCR may cut off the end of a word)
         for lk in sorted_lookup_keys:
             if lk.startswith(token) and len(token) >= max(4, len(lk) - 4):
                 original_key, info = ing_lookup[lk]
@@ -437,7 +467,7 @@ def match_product():
                     })
                 return
 
-        # c) Substring match (for short database keys contained inside a longer OCR token)
+        # c) Substring match (short DB key contained inside a longer OCR token)
         for lk in sorted_lookup_keys:
             if len(lk) >= 4 and lk in token:
                 original_key, info = ing_lookup[lk]

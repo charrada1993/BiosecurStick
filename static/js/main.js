@@ -433,9 +433,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 processedBlob,
                 'fra+eng',
                 {
-                    tessedit_pageseg_mode: '6',
-                    tessedit_ocr_engine_mode: '1',
-                    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-,. /()',
+                    tessedit_pageseg_mode: '6',    // Uniform block of text
+                    tessedit_ocr_engine_mode: '1', // LSTM only (best accuracy)
+                    // NOTE: Do NOT set tessedit_char_whitelist — it silently drops
+                    // accented letters (é, è, ê, ë, etc.) and hyphens inside
+                    // INCI names like "PPG-15", breaking ingredient recognition.
                     logger: m => {
                         if (m.status === 'recognizing text') {
                             const pct = Math.round(15 + m.progress * 85);
