@@ -654,8 +654,8 @@ def calculate_score():
             "error": "Aucun ingrédient fourni"
         })
         
-    fb_ingredients = firebase_request('ingredients')
-    master_ingredients = fb_ingredients if fb_ingredients is not None else db.get("ingredients", {})
+    fb_ingredients = firebase_request('ingredients_list')
+    master_ingredients = firebase_list_to_dict(fb_ingredients) if fb_ingredients is not None else db.get("ingredients", {})
     results = []
     
     total_score_sum = 0.0
@@ -734,8 +734,8 @@ def add_product():
         return jsonify({"error": "Le nom du produit et la liste des ingrédients sont requis."}), 400
         
     # Get master list of ingredients from Firebase or local DB
-    fb_ingredients = firebase_request('ingredients')
-    master_ingredients = fb_ingredients if fb_ingredients is not None else db.get("ingredients", {})
+    fb_ingredients = firebase_request('ingredients_list')
+    master_ingredients = firebase_list_to_dict(fb_ingredients) if fb_ingredients is not None else db.get("ingredients", {})
     
     # Calculate scores for each ingredient automatically
     calculated_ingredients = []
