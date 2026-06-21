@@ -1,6 +1,11 @@
 import os
 import json
 import re
+try:
+    from rapidfuzz import process as fuzz_process, fuzz
+    RAPIDFUZZ_AVAILABLE = True
+except ImportError:
+    RAPIDFUZZ_AVAILABLE = False
 import urllib.request
 import urllib.parse
 from flask import Flask, jsonify, request, render_template, send_from_directory, session, redirect, url_for
@@ -251,7 +256,11 @@ def match_product():
     """
     Multi-strategy OCR text → ingredient list extraction.
     Strategy 1: Match predefined products by brand/name tokens.
-    Strategy 2: Split OCR text into comma/newline tokens and fuzzy-match each against the ingredient master list.
+    Strategy 2: Split OCR text into tokens; for each token try:
+        a) Exact match
+        b) Prefix match  (OCR truncated end of word)
+        c) Substring match (short DB key inside longer OCR token)
+        d) Fuzzy match via RapidFuzz (handles OCR character swaps, e.g. 1↔l, 0↔O)
     Strategy 3: Full-text substring scan as fallback.
     """
     import unicodedata
@@ -435,6 +444,13 @@ def match_product():
                     return ing["concentration"]
         return "1-3%"
 
+    # ── Pre-build fuzzy candidate list (normalized keys, shortest-first) ───
+    # Only keys long enough to be a real ingredient name (avoids false positives
+    # on tiny 3-letter keys like 'peg' matching 'ppg' at high confidence).
+    FUZZY_MIN_KEY_LEN = 5
+    FUZZY_SCORE_CUTOFF = 85  # 0-100; 85 = very strict, avoids false positives
+    fuzzy_candidates = [lk for lk in sorted_lookup_keys if len(lk) >= FUZZY_MIN_KEY_LEN]
+
     def try_match_token(token):
         """Try to match a single OCR token to an ingredient using multiple strategies."""
         token = token.strip()
@@ -444,18 +460,19 @@ def match_product():
         # Apply alias normalization
         token = normalize_with_aliases(token)
 
-        # a) Exact match
+        # ── a) Exact match ────────────────────────────────────────────────
         if token in ing_lookup:
             original_key, info = ing_lookup[token]
             if original_key not in found_keys:
                 found_keys.add(original_key)
                 matched_ingredients.append({
                     "inci": info["inci"],
-                    "concentration": get_typical_concentration(original_key, info)
+                    "concentration": get_typical_concentration(original_key, info),
+                    "match_method": "exact"
                 })
             return
 
-        # b) Prefix match (OCR may cut off the end of a word)
+        # ── b) Prefix match (OCR may cut off the end of a word) ───────────
         for lk in sorted_lookup_keys:
             if lk.startswith(token) and len(token) >= max(4, len(lk) - 4):
                 original_key, info = ing_lookup[lk]
@@ -463,11 +480,12 @@ def match_product():
                     found_keys.add(original_key)
                     matched_ingredients.append({
                         "inci": info["inci"],
-                        "concentration": get_typical_concentration(original_key, info)
+                        "concentration": get_typical_concentration(original_key, info),
+                        "match_method": "prefix"
                     })
                 return
 
-        # c) Substring match (short DB key contained inside a longer OCR token)
+        # ── c) Substring match (short DB key inside longer OCR token) ─────
         for lk in sorted_lookup_keys:
             if len(lk) >= 4 and lk in token:
                 original_key, info = ing_lookup[lk]
@@ -475,9 +493,31 @@ def match_product():
                     found_keys.add(original_key)
                     matched_ingredients.append({
                         "inci": info["inci"],
-                        "concentration": get_typical_concentration(original_key, info)
+                        "concentration": get_typical_concentration(original_key, info),
+                        "match_method": "substring"
                     })
                 return
+
+        # ── d) Fuzzy match via RapidFuzz (handles OCR char errors: 1↔l, 0↔O) ─
+        # Only run when the token is long enough to avoid accidental matches.
+        if RAPIDFUZZ_AVAILABLE and len(token) >= FUZZY_MIN_KEY_LEN:
+            result = fuzz_process.extractOne(
+                token,
+                fuzzy_candidates,
+                scorer=fuzz.token_sort_ratio,  # robust to word-order / OCR shifts
+                score_cutoff=FUZZY_SCORE_CUTOFF
+            )
+            if result:
+                matched_key, score, _ = result
+                original_key, info = ing_lookup[matched_key]
+                if original_key not in found_keys:
+                    found_keys.add(original_key)
+                    matched_ingredients.append({
+                        "inci": info["inci"],
+                        "concentration": get_typical_concentration(original_key, info),
+                        "match_method": f"fuzzy({score})"
+                    })
+            return
 
     # Try each individual OCR token
     for token in cleaned_tokens:

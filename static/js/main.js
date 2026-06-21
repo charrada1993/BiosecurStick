@@ -502,14 +502,19 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (!data.matched && data.ingredients && data.ingredients.length > 0) {
                 // Ingredients extracted from OCR/text
                 const count = data.ingredients.length;
-                showToast(`✅ ${count} ingrédient${count > 1 ? 's' : ''} INCI identifié${count > 1 ? 's' : ''} — Calcul du score en cours...`, 'success', 5000);
+                const fuzzyCount = data.ingredients.filter(i => i.match_method && i.match_method.startsWith('fuzzy')).length;
+                let toastMsg = `✅ ${count} ingrédient${count > 1 ? 's' : ''} INCI identifié${count > 1 ? 's' : ''}`;
+                if (fuzzyCount > 0) toastMsg += ` (dont ${fuzzyCount} via correspondance floue)`;
+                toastMsg += ` — Calcul du score en cours...`;
+                showToast(toastMsg, 'success', 5000);
 
                 activeProductName = "Formulation scannée (OCR)";
                 activeProductCat = "Analyse INCI";
                 activeProductRef = "Scan photo étiquette";
                 activeIngredients = data.ingredients.map(ing => ({
                     inci: ing.inci,
-                    concentration: ing.concentration
+                    concentration: ing.concentration,
+                    match_method: ing.match_method || 'exact'
                 }));
 
                 renderEditorList();
@@ -844,6 +849,20 @@ document.addEventListener('DOMContentLoaded', () => {
         calculateAndDisplay();
     });
 
+    function getMatchBadge(method) {
+        if (!method || method === 'exact') {
+            return '<span class="match-badge match-exact" title="Correspondance exacte">Exact</span>';
+        } else if (method === 'prefix') {
+            return '<span class="match-badge match-prefix" title="Correspondance par préfixe (OCR a tronqué le mot)">Préfixe</span>';
+        } else if (method === 'substring') {
+            return '<span class="match-badge match-substring" title="Correspondance par sous-chaîne">Partiel</span>';
+        } else if (method.startsWith('fuzzy')) {
+            const score = method.match(/\d+/);
+            return `<span class="match-badge match-fuzzy" title="Correspondance floue RapidFuzz — score ${score ? score[0] : '?'}/100">Flou ${score ? score[0] : ''}%</span>`;
+        }
+        return '';
+    }
+
     function renderEditorList() {
         editorList.innerHTML = '';
         
@@ -859,7 +878,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const nameSpan = document.createElement('span');
             nameSpan.className = 'editor-name';
             nameSpan.title = ing.inci;
-            nameSpan.innerText = ing.inci;
+            nameSpan.innerHTML = ing.inci + (ing.match_method ? ' ' + getMatchBadge(ing.match_method) : '');
 
             const concInput = document.createElement('input');
             concInput.type = 'text';
