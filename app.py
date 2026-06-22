@@ -71,26 +71,16 @@ def firebase_list_to_dict(lst):
 
 def initialize_firebase_data():
     try:
-        # Check if products exist in Firebase
-        products_in_fb = firebase_request('products')
-        ingredients_in_fb = firebase_request('ingredients_list')
-        
-        # If products are missing or empty, seed them from local DB
-        if not products_in_fb:
-            print("Seeding products to Firebase Realtime Database...")
-            firebase_request('products', method='PUT', data=db.get("products", []))
-            print("Products seeded successfully.")
-            
-        # If ingredients are missing or empty, seed them
-        if not ingredients_in_fb:
-            print("Seeding master ingredients list to Firebase Realtime Database...")
-            ing_list = dict_to_firebase_list(db.get("ingredients", {}))
-            firebase_request('ingredients_list', method='PUT', data=ing_list)
-            print("Ingredients seeded successfully.")
+        # Always push local data to Firebase to ensure corrections are reflected
+        print("Synchronizing local database.json to Firebase Realtime Database...")
+        firebase_request('products', method='PUT', data=db.get("products", []))
+        ing_list = dict_to_firebase_list(db.get("ingredients", {}))
+        firebase_request('ingredients_list', method='PUT', data=ing_list)
+        print("Firebase sync complete.")
     except Exception as e:
-        print(f"Error seeding Firebase data: {e}")
+        print(f"Error syncing Firebase data: {e}")
 
-# Try to initialize Firebase data at startup
+# Sync local data to Firebase at startup
 initialize_firebase_data()
 
 def parse_concentration_range(con_str):
@@ -806,6 +796,27 @@ def add_product():
         "firebase_sync": firebase_sync_success,
         "product": new_product
     })
+
+
+@app.route('/api/admin/force_sync', methods=['POST'])
+def force_sync():
+    """Force-push all local database.json data to Firebase (admin only)."""
+    if session.get('role') != 'admin':
+        return jsonify({"error": "Accès refusé. Administrateur uniquement."}), 403
+    try:
+        fresh_db = load_db()
+        ok_products = firebase_request('products', method='PUT', data=fresh_db.get("products", []))
+        ing_list = dict_to_firebase_list(fresh_db.get("ingredients", {}))
+        ok_ings = firebase_request('ingredients_list', method='PUT', data=ing_list)
+        if ok_products is None or ok_ings is None:
+            return jsonify({"success": False, "message": "Firebase non disponible — données locales utilisées."})
+        return jsonify({
+            "success": True,
+            "products_count": len(fresh_db.get("products", [])),
+            "message": "Synchronisation Firebase complète."
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

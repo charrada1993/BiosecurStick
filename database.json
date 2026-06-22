@@ -640,7 +640,8 @@
             ],
             "interpretation": "Sûr (0–30%)",
             "name": "NARTA EFFICACITÉ INTÉGRALE 48H",
-            "reference": "50ml"
+            "reference": "50ml",
+            "inci_manuel": "Aqua/Water, Aluminum Chlorohydrate, Cetearyl Alcohol, Ceteareth-33, Parfum/Fragrance, Dimethicone, Phenoxyethanol, Pentylene Glycol, Tetrasodium Glutamate Diacetate, Linalool, Limonene, Benzyl Alcohol, Geraniol"
         },
         {
             "category": "Chimique",
@@ -2172,7 +2173,7 @@
                 }
             ],
             "interpretation": "Sûr (0–30%)",
-            "name": "MONOPIX ANTI-TRANSPIRANT 48H",
+            "name": "MONOPRIX ANTI-TRANSPIRANT 48H",
             "reference": "50ml - Monoprix"
         },
         {

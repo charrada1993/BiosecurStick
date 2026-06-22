@@ -98,22 +98,47 @@
                     <p class="card-desc">Glissez-déposez la photo du déodorant (ou de sa liste d'ingrédients) pour
                         lancer le scan intelligent.</p>
 
-                    <div class="upload-zone" id="dropZone">
-                        <input type="file" id="fileInput" accept="image/*" capture="environment" class="file-input">
-                        <div class="upload-prompt" id="uploadPrompt">
-                            <svg viewBox="0 0 24 24" width="48" height="48" class="upload-icon">
-                                <path fill="none" stroke="currentColor" stroke-width="2"
-                                    d="M12 4v12m-4-4l4-4 4 4m-9 7h10" />
-                            </svg>
-                            <span class="upload-text">Déposez l'image ici ou <span>cliquez pour parcourir</span></span>
-                            <span class="upload-limits">Format acceptés : JPG, PNG, WEBP.</span>
+                    <div class="dual-upload-container">
+                        <!-- Front Photo Zone -->
+                        <div class="upload-zone dual-zone" id="dropZoneFront">
+                            <input type="file" id="fileInputFront" accept="image/*" capture="environment" class="file-input">
+                            <div class="upload-prompt" id="uploadPromptFront">
+                                <svg viewBox="0 0 24 24" width="36" height="36" class="upload-icon">
+                                    <path fill="none" stroke="currentColor" stroke-width="2" d="M12 4v12m-4-4l4-4 4 4m-9 7h10" />
+                                </svg>
+                                <span class="upload-text">Face Avant (Recto)</span>
+                                <span class="upload-subtext">Nom/Marque du produit</span>
+                            </div>
+                            <div class="preview-area" id="previewAreaFront" style="display: none;">
+                                <img id="imagePreviewFront" alt="Aperçu Face Avant">
+                                <button class="btn btn-danger remove-preview-btn" id="removePreviewBtnFront" type="button">✖</button>
+                            </div>
                         </div>
-                        <div class="preview-area" id="previewArea" style="display: none;">
-                            <img id="imagePreview" alt="Aperçu étiquette">
-                            <button class="btn btn-danger btn-sm remove-preview-btn" id="removePreviewBtn"
-                                type="button">Changer d'image</button>
+
+                        <!-- Back Photo Zone -->
+                        <div class="upload-zone dual-zone" id="dropZoneBack">
+                            <input type="file" id="fileInputBack" accept="image/*" capture="environment" class="file-input">
+                            <div class="upload-prompt" id="uploadPromptBack">
+                                <svg viewBox="0 0 24 24" width="36" height="36" class="upload-icon">
+                                    <path fill="none" stroke="currentColor" stroke-width="2" d="M12 4v12m-4-4l4-4 4 4m-9 7h10" />
+                                </svg>
+                                <span class="upload-text">Face Arrière (Verso)</span>
+                                <span class="upload-subtext">Ingrédients INCI</span>
+                            </div>
+                            <div class="preview-area" id="previewAreaBack" style="display: none;">
+                                <img id="imagePreviewBack" alt="Aperçu Face Arrière">
+                                <button class="btn btn-danger remove-preview-btn" id="removePreviewBtnBack" type="button">✖</button>
+                            </div>
                         </div>
                     </div>
+
+                    <!-- Analyse Trigger Button -->
+                    <button class="btn btn-cyan btn-full" id="btnScanPhotos" type="button" style="margin-top: 15px; display: none;">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style="margin-right: 6px;">
+                            <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                        </svg>
+                        Lancer l'analyse biométrique
+                    </button>
 
                     <!-- Progress Bar (hidden by default) -->
                     <div class="progress-container" id="progressContainer" style="display: none;">
@@ -272,6 +297,11 @@
                                     <span class="detail-label">Ingrédients :</span>
                                     <span class="detail-val" id="resNbIngr">13</span>
                                 </div>
+                                <div class="detail-item" id="inciManuelRow" style="display:none; flex-direction:column; gap:4px;">
+                                    <span class="detail-label" style="font-size:12px; color:var(--color-accent-cyan);">📋 Liste INCI (Étiquette Manuel) :</span>
+                                    <span class="detail-val" id="inciManuelText" style="font-size:11px; color:var(--color-text-secondary); word-break:break-word; line-height:1.6; font-style:italic;"></span>
+                                </div>
+
                             </div>
 
                             <div class="interpretation-box" id="resInterpretation">

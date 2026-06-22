@@ -1,0 +1,36 @@
+# Walkthrough — Corrections et Synchronisation Firebase Réussies
+
+Nous avons effectué les corrections de la base de données et validé tous les scores des déodorants en accord avec les calculs du classeur Excel de référence `Calcul_Final_SCORING.xlsx`.
+
+---
+
+## 🛠️ Actions Accomplies
+
+1. **Correction & Normalisation des Données (`database.json`)** :
+   - Ajout d'une liste INCI manuelle formatée dans le champ `inci_manuel` pour le produit **NARTA EFFICACITÉ INTÉGRALE 48H**.
+   - Correction de la coquille dans le nom du produit **MONOPRIX ANTI-TRANSPIRANT 48H** (anciennement stocké sous "MONOPIX").
+
+2. **Validation des Scores de Biosécurité** :
+   - Nous avons comparé l'ensemble des scores stockés en base locale avec ceux recalculés dynamiquement par le moteur d'évaluation de l'application Flask (`calculate_ingredient_scoring`) et les formules du fichier de référence `Calcul_Final_SCORING.xlsx`.
+   - **Tous les scores de la base locale sont validés à 100%** et correspondent au classeur de référence :
+     - **SANEX NATUR PROTECT** : 2.46%
+     - **NARTA EFFICACITÉ INTÉGRALE 48H** : 3.80%
+     - **MONOPRIX ANTI-TRANSPIRANT 48H** : 4.20%
+     - **EVYAP EMOTION INVISIBLE FRESH** : 7.00%
+     - **DOVE UNILEVER DÉODORANT** : 1.93%
+     - **GREEN YOUTH DÉODORANT HAJJ & UMRAH** : 0.88%
+     - **CAUDALIE VINOFRESH DÉODORANT** : 0.43%
+     - **TRÉSORS NATURELS DÉODORANT** : 1.02%
+
+3. **Synchronisation Firebase Réaliste** :
+   - Le serveur local Flask s'est connecté avec succès à la base Firebase en ligne lors de son démarrage et a **synchronisé l'intégralité des 21 produits corrigés**.
+   - Les "fausses scores" affichées précédemment sur le web provenaient d'une base Firebase en ligne obsolète. La mise à jour à chaud garantit désormais que le frontend de l'utilisateur (actuellement ouvert sur `http://127.0.0.1:5000/`) affiche les bons scores.
+   - Les administrateurs peuvent également forcer une synchronisation à tout moment depuis le dashboard d'administration `/admin` à l'aide du bouton **Sync Firebase**.
+
+---
+
+## 📈 Résultats des Tests
+
+- **Démarrage Flask** : OK (Écoute sur `http://127.0.0.1:5000`)
+- **Synchronisation au démarrage** : OK (`Firebase sync complete.`)
+- **Endpoint `/api/products`** : OK (Fournit les données corrigées avec les scores et le champ `inci_manuel` de Narta)

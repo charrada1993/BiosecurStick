@@ -30,13 +30,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const sunIcon = themeToggleBtn.querySelector('.sun-icon');
     const moonIcon = themeToggleBtn.querySelector('.moon-icon');
 
-    // Drag & Drop OCR
-    const dropZone = document.getElementById('dropZone');
-    const fileInput = document.getElementById('fileInput');
-    const uploadPrompt = document.getElementById('uploadPrompt');
-    const previewArea = document.getElementById('previewArea');
-    const imagePreview = document.getElementById('imagePreview');
-    const removePreviewBtn = document.getElementById('removePreviewBtn');
+    // Drag & Drop OCR - Dual Upload
+    const dropZoneFront = document.getElementById('dropZoneFront');
+    const fileInputFront = document.getElementById('fileInputFront');
+    const uploadPromptFront = document.getElementById('uploadPromptFront');
+    const previewAreaFront = document.getElementById('previewAreaFront');
+    const imagePreviewFront = document.getElementById('imagePreviewFront');
+    const removePreviewBtnFront = document.getElementById('removePreviewBtnFront');
+
+    const dropZoneBack = document.getElementById('dropZoneBack');
+    const fileInputBack = document.getElementById('fileInputBack');
+    const uploadPromptBack = document.getElementById('uploadPromptBack');
+    const previewAreaBack = document.getElementById('previewAreaBack');
+    const imagePreviewBack = document.getElementById('imagePreviewBack');
+    const removePreviewBtnBack = document.getElementById('removePreviewBtnBack');
+
+    const btnScanPhotos = document.getElementById('btnScanPhotos');
+
+    let selectedFileFront = null;
+    let selectedFileBack = null;
     
     // OCR Progress
     const progressContainer = document.getElementById('progressContainer');
@@ -222,71 +234,152 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // ─── DRAG & DROP / FILE UPLOAD (OCR) ───────────────────────────
+    // ─── DRAG & DROP / FILE UPLOAD (OCR) — DUAL UPLOAD ───────────────────
+    
+    // Front upload listeners
     ['dragenter', 'dragover'].forEach(eventName => {
-        dropZone.addEventListener(eventName, (e) => {
+        dropZoneFront.addEventListener(eventName, (e) => {
             e.preventDefault();
             e.stopPropagation();
-            dropZone.classList.add('highlight');
+            dropZoneFront.classList.add('highlight');
         }, false);
     });
 
     ['dragleave', 'drop'].forEach(eventName => {
-        dropZone.addEventListener(eventName, (e) => {
+        dropZoneFront.addEventListener(eventName, (e) => {
             e.preventDefault();
             e.stopPropagation();
-            dropZone.classList.remove('highlight');
+            dropZoneFront.classList.remove('highlight');
         }, false);
     });
 
-    dropZone.addEventListener('drop', (e) => {
+    dropZoneFront.addEventListener('drop', (e) => {
         const dt = e.dataTransfer;
         const files = dt.files;
         if (files.length > 0) {
-            handleImageFile(files[0]);
+            handleFrontFile(files[0]);
         }
     });
 
-    fileInput.addEventListener('change', (e) => {
-        if (fileInput.files.length > 0) {
-            handleImageFile(fileInput.files[0]);
+    fileInputFront.addEventListener('change', (e) => {
+        if (fileInputFront.files.length > 0) {
+            handleFrontFile(fileInputFront.files[0]);
         }
     });
 
-    removePreviewBtn.addEventListener('click', (e) => {
+    removePreviewBtnFront.addEventListener('click', (e) => {
         e.stopPropagation();
-        resetOCRScanner();
+        resetFrontScanner();
     });
+
+    function resetFrontScanner() {
+        fileInputFront.value = '';
+        imagePreviewFront.src = '';
+        previewAreaFront.style.display = 'none';
+        uploadPromptFront.style.display = 'flex';
+        selectedFileFront = null;
+        updateScanButtonState();
+    }
+
+    function handleFrontFile(file) {
+        if (!file.type.startsWith('image/')) {
+            alert('Veuillez sélectionner un fichier image valide pour la face avant.');
+            return;
+        }
+        selectedFileFront = file;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            imagePreviewFront.src = e.target.result;
+            uploadPromptFront.style.display = 'none';
+            previewAreaFront.style.display = 'flex';
+            updateScanButtonState();
+        };
+        reader.readAsDataURL(file);
+    }
+
+    // Back upload listeners
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropZoneBack.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZoneBack.classList.add('highlight');
+        }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropZoneBack.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZoneBack.classList.remove('highlight');
+        }, false);
+    });
+
+    dropZoneBack.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        if (files.length > 0) {
+            handleBackFile(files[0]);
+        }
+    });
+
+    fileInputBack.addEventListener('change', (e) => {
+        if (fileInputBack.files.length > 0) {
+            handleBackFile(fileInputBack.files[0]);
+        }
+    });
+
+    removePreviewBtnBack.addEventListener('click', (e) => {
+        e.stopPropagation();
+        resetBackScanner();
+    });
+
+    function resetBackScanner() {
+        fileInputBack.value = '';
+        imagePreviewBack.src = '';
+        previewAreaBack.style.display = 'none';
+        uploadPromptBack.style.display = 'flex';
+        selectedFileBack = null;
+        updateScanButtonState();
+    }
+
+    function handleBackFile(file) {
+        if (!file.type.startsWith('image/')) {
+            alert('Veuillez sélectionner un fichier image valide pour la face arrière.');
+            return;
+        }
+        selectedFileBack = file;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            imagePreviewBack.src = e.target.result;
+            uploadPromptBack.style.display = 'none';
+            previewAreaBack.style.display = 'flex';
+            updateScanButtonState();
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function updateScanButtonState() {
+        if (selectedFileFront || selectedFileBack) {
+            btnScanPhotos.style.display = 'flex';
+        } else {
+            btnScanPhotos.style.display = 'none';
+        }
+    }
 
     function resetOCRScanner() {
-        fileInput.value = '';
-        imagePreview.src = '';
-        previewArea.style.display = 'none';
-        uploadPrompt.style.display = 'flex';
+        resetFrontScanner();
+        resetBackScanner();
         progressContainer.style.display = 'none';
         progressBar.style.width = '0%';
         progressPercent.innerText = '0%';
         progressStatus.innerText = '';
     }
 
-    function handleImageFile(file) {
-        if (!file.type.startsWith('image/')) {
-            alert('Veuillez sélectionner un fichier image valide.');
-            return;
-        }
+    btnScanPhotos.addEventListener('click', () => {
+        runDualOCR();
+    });
 
-        // Show image preview
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            imagePreview.src = e.target.result;
-            uploadPrompt.style.display = 'none';
-            previewArea.style.display = 'flex';
-            runOCR(file);
-        };
-        reader.readAsDataURL(file);
-    }
-
-    // ─── CLIENT-SIDE TESSERACT OCR ─────────────────────────────────
+    // ─── CLIENT-SIDE TOAST NOTIFICATIONS ───────────────────────────────
     function showToast(message, type = 'info', duration = 4000) {
         // Remove any existing toast
         const existing = document.getElementById('ocrToast');
@@ -328,110 +421,37 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => { if (toast.parentNode) toast.remove(); }, duration);
     }
 
-    // ─── IMAGE PREPROCESSING ────────────────────────────────────────
-    function preprocessImageForOCR(file) {
-        return new Promise((resolve) => {
-            const img = new Image();
-            const url = URL.createObjectURL(file);
+    // ─── Promise-based helper for Tesseract fallbacks ───────────────────
+    function runTesseractOCRDirect(processedBlob) {
+        return new Promise((resolve, reject) => {
+            if (typeof Tesseract === 'undefined') {
+                reject(new Error('Tesseract.js non disponible. Configurez GOOGLE_VISION_API_KEY.'));
+                return;
+            }
 
-            img.onload = () => {
-                URL.revokeObjectURL(url);
-
-                const canvas = document.createElement('canvas');
-
-                // Scale up: Tesseract needs ~300 DPI. Target min 2000px on longest side.
-                const maxSide = Math.max(img.width, img.height);
-                const scale = maxSide < 2000 ? Math.min(3, 2000 / maxSide) : 1;
-                canvas.width  = Math.round(img.width  * scale);
-                canvas.height = Math.round(img.height * scale);
-
-                const ctx = canvas.getContext('2d');
-
-                // Enable image smoothing for upscale quality
-                ctx.imageSmoothingEnabled = true;
-                ctx.imageSmoothingQuality = 'high';
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-                // ── Pixel-level processing ──────────────────────────
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const d = imageData.data;
-
-                // 1. Grayscale + contrast stretch
-                let minL = 255, maxL = 0;
-                for (let i = 0; i < d.length; i += 4) {
-                    const gray = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
-                    if (gray < minL) minL = gray;
-                    if (gray > maxL) maxL = gray;
-                }
-                const range = maxL - minL || 1;
-
-                for (let i = 0; i < d.length; i += 4) {
-                    // Grayscale
-                    const gray = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
-
-                    // Stretch contrast to full 0–255 range
-                    let stretched = ((gray - minL) / range) * 255;
-
-                    // Boost contrast around midpoint
-                    stretched = (stretched - 128) * 1.6 + 128;
-                    stretched = Math.max(0, Math.min(255, stretched));
-
-                    d[i] = d[i+1] = d[i+2] = Math.round(stretched);
-                }
-
-                ctx.putImageData(imageData, 0, 0);
-
-                // 2. Unsharp mask (simple version: blend with blurred copy)
-                const sharpCanvas = document.createElement('canvas');
-                sharpCanvas.width  = canvas.width;
-                sharpCanvas.height = canvas.height;
-                const sCtx = sharpCanvas.getContext('2d');
-
-                // Draw blurred version
-                sCtx.filter = 'blur(1px)';
-                sCtx.drawImage(canvas, 0, 0);
-                sCtx.filter = 'none';
-
-                const blurData = sCtx.getImageData(0, 0, sharpCanvas.width, sharpCanvas.height);
-                const sharpData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-                for (let i = 0; i < sharpData.data.length; i += 4) {
-                    // sharpen = original + amount * (original - blur)
-                    const amount = 1.2;
-                    for (let c = 0; c < 3; c++) {
-                        let val = sharpData.data[i+c] + amount * (sharpData.data[i+c] - blurData.data[i+c]);
-                        sharpData.data[i+c] = Math.max(0, Math.min(255, Math.round(val)));
+            Tesseract.recognize(
+                processedBlob,
+                'fra+eng',
+                {
+                    tessedit_pageseg_mode: '6',
+                    tessedit_ocr_engine_mode: '1',
+                    logger: m => {
+                        if (m.status === 'recognizing text') {
+                            const pct = Math.round(m.progress * 100);
+                            progressStatus.innerText = `🔍 Tesseract (moteur local) : ${pct}%`;
+                        }
                     }
                 }
-                ctx.putImageData(sharpData, 0, 0);
-
-                // Return canvas as Blob
-                canvas.toBlob((blob) => resolve(blob), 'image/png');
-            };
-
-            img.onerror = () => {
-                URL.revokeObjectURL(url);
-                resolve(file); // fallback: use original
-            };
-
-            img.src = url;
+            ).then(({ data: { text } }) => {
+                resolve(text || '');
+            }).catch(reject);
         });
     }
 
-    function runOCR(file) {
-        progressContainer.style.display = 'block';
-        progressBar.style.width = '5%';
-        progressPercent.innerText = '5%';
-        progressStatus.innerText = '🖼️ Prétraitement de l\'image...';
-
-        preprocessImageForOCR(file).then((processedBlob) => {
-            progressBar.style.width = '20%';
-            progressPercent.innerText = '20%';
-            progressStatus.innerText = '☁️ Envoi vers Google Cloud Vision...';
-
-            // ── Build multipart form upload ─────────────────────────────
+    function uploadAndRunOCR(processedBlob, filename) {
+        return new Promise((resolve, reject) => {
             const formData = new FormData();
-            formData.append('image', processedBlob, 'label.png');
+            formData.append('image', processedBlob, filename);
 
             fetch('/api/ocr', {
                 method: 'POST',
@@ -440,87 +460,103 @@ document.addEventListener('DOMContentLoaded', () => {
             .then(async (response) => {
                 const data = await response.json();
 
-                // ── 503: API key not configured → fall back to Tesseract ─
+                // 503 status = Google API Key not set, fallback to local Tesseract
                 if (response.status === 503) {
                     console.warn('Google Vision API key not set — falling back to Tesseract.js');
-                    progressStatus.innerText = '⚙️ Clé Vision absente — Tesseract activé...';
-                    runOCRTesseractFallback(processedBlob);
+                    progressStatus.innerText = '⚙️ Clé Vision absente — Tesseract local activé...';
+                    runTesseractOCRDirect(processedBlob)
+                        .then(resolve)
+                        .catch(reject);
                     return;
                 }
 
-                // ── Other server errors ───────────────────────────────────
                 if (!response.ok || data.error) {
-                    const errMsg = data.error || `HTTP ${response.status}`;
-                    progressStatus.innerText = `Erreur Vision API : ${errMsg}`;
-                    showToast(`Erreur OCR : ${errMsg}`, 'error');
-                    progressContainer.style.display = 'none';
+                    reject(new Error(data.error || `HTTP ${response.status}`));
                     return;
                 }
 
-                // ── Success ───────────────────────────────────────────────
-                progressBar.style.width = '90%';
-                progressPercent.innerText = '90%';
-                progressStatus.innerText = `✓ ${data.words || 0} mots extraits — Identification des ingrédients...`;
-
-                console.log('Google Vision OCR text:', data.text);
-
-                progressBar.style.width = '100%';
-                progressPercent.innerText = '100%';
-                matchOCRTextOnBackend(data.text || '');
-                setTimeout(() => { progressContainer.style.display = 'none'; }, 1500);
+                resolve(data.text || '');
             })
-            .catch(err => {
-                console.error('OCR fetch error:', err);
-                progressStatus.innerText = `Erreur réseau : ${err.message}`;
-                showToast(`Erreur OCR : ${err.message || 'Erreur réseau'}`, 'error');
-                progressContainer.style.display = 'none';
-            });
+            .catch(reject);
         });
     }
 
-    // ─── TESSERACT.JS FALLBACK (used when Google Vision key not set) ───────────
-    function runOCRTesseractFallback(processedBlob) {
-        if (typeof Tesseract === 'undefined') {
-            progressStatus.innerText = 'OCR indisponible. Configurez GOOGLE_VISION_API_KEY sur le serveur.';
-            showToast('Configurez la clé Google Vision API pour activer le scan photo.', 'warning', 8000);
-            progressContainer.style.display = 'none';
+    // ─── DUAL OCR EXECUTION FLOW ──────────────────────────────────────────
+    async function runDualOCR() {
+        if (!selectedFileFront && !selectedFileBack) {
+            showToast('Veuillez sélectionner au moins une photo.', 'warning');
             return;
         }
 
-        progressBar.style.width = '25%';
-        progressPercent.innerText = '25%';
-        progressStatus.innerText = '⚙️ Initialisation Tesseract (mode fallback)...';
+        progressContainer.style.display = 'block';
+        progressBar.style.width = '5%';
+        progressPercent.innerText = '5%';
+        progressStatus.innerText = '🖼️ Initialisation du scan...';
 
-        Tesseract.recognize(
-            processedBlob,
-            'fra+eng',
-            {
-                tessedit_pageseg_mode: '6',
-                tessedit_ocr_engine_mode: '1',
-                logger: m => {
-                    if (m.status === 'recognizing text') {
-                        const pct = Math.round(25 + m.progress * 75);
-                        progressBar.style.width = pct + '%';
-                        progressPercent.innerText = pct + '%';
-                        progressStatus.innerText = `🔍 Tesseract : ${pct}%`;
-                    } else if (m.status === 'loading tesseract core') {
-                        progressStatus.innerText = '⚙️ Chargement du moteur OCR...';
-                    } else if (m.status === 'loading language traineddata') {
-                        progressStatus.innerText = '📚 Chargement des données linguistiques...';
-                    }
+        btnScanPhotos.disabled = true;
+        btnScanPhotos.innerHTML = '⏳ Scan en cours...';
+
+        let combinedText = '';
+
+        try {
+            // Process Front image
+            if (selectedFileFront) {
+                progressStatus.innerText = '🖼️ Prétraitement de la Face Avant (Recto)...';
+                progressBar.style.width = '15%';
+                progressPercent.innerText = '15%';
+                
+                const processedBlobFront = await preprocessImageForOCR(selectedFileFront);
+                
+                progressStatus.innerText = '☁️ OCR de la Face Avant...';
+                progressBar.style.width = '35%';
+                progressPercent.innerText = '35%';
+
+                const frontText = await uploadAndRunOCR(processedBlobFront, 'front.png');
+                if (frontText) {
+                    combinedText += frontText + '\n\n';
+                    console.log('Front OCR Text:', frontText);
                 }
             }
-        ).then(({ data: { text } }) => {
-            progressStatus.innerText = '✓ Scan Tesseract terminé — Identification...';
+
+            // Process Back image
+            if (selectedFileBack) {
+                progressStatus.innerText = '🖼️ Prétraitement de la Face Arrière (Verso)...';
+                progressBar.style.width = '60%';
+                progressPercent.innerText = '60%';
+                
+                const processedBlobBack = await preprocessImageForOCR(selectedFileBack);
+                
+                progressStatus.innerText = '☁️ OCR de la Face Arrière...';
+                progressBar.style.width = '80%';
+                progressPercent.innerText = '80%';
+
+                const backText = await uploadAndRunOCR(processedBlobBack, 'back.png');
+                if (backText) {
+                    combinedText += backText;
+                    console.log('Back OCR Text:', backText);
+                }
+            }
+
+            progressStatus.innerText = '✓ Analyse des ingrédients extraits...';
+            progressBar.style.width = '95%';
+            progressPercent.innerText = '95%';
+
+            await matchOCRTextOnBackend(combinedText.trim());
+            
             progressBar.style.width = '100%';
             progressPercent.innerText = '100%';
-            console.log('Tesseract fallback text:', text);
-            matchOCRTextOnBackend(text);
             setTimeout(() => { progressContainer.style.display = 'none'; }, 1500);
-        }).catch(err => {
-            progressStatus.innerText = `Erreur Tesseract : ${err.message || err}`;
+
+        } catch (err) {
+            console.error('OCR processing failed:', err);
+            progressStatus.innerText = `Erreur : ${err.message || err}`;
             showToast(`Erreur OCR : ${err.message || 'Erreur inconnue'}`, 'error');
-        });
+        } finally {
+            btnScanPhotos.disabled = false;
+            btnScanPhotos.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style="margin-right: 6px;">
+                <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+            </svg> Lancer l'analyse biométrique`;
+        }
     }
 
 
@@ -770,6 +806,18 @@ document.addEventListener('DOMContentLoaded', () => {
         resProdCat.innerText  = activeProductCat;
         resProdRef.innerText  = activeProductRef;
         resNbIngr.innerText   = allResults.length;
+
+        // ── INCI Manuel (optional field, shown only when present) ──────
+        const inciManuelRow = document.getElementById('inciManuelRow');
+        const inciManuelText = document.getElementById('inciManuelText');
+        if (inciManuelRow && inciManuelText) {
+            if (product && product.inci_manuel) {
+                inciManuelText.innerText = product.inci_manuel;
+                inciManuelRow.style.display = 'flex';
+            } else {
+                inciManuelRow.style.display = 'none';
+            }
+        }
 
         // ── Recommendations ────────────────────────────────────────────
         recContent.innerHTML = '';
