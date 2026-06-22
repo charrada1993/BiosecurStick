@@ -1817,7 +1817,122 @@ body {
     }
     
     .app-header {
-        padding: 12px 0;
+        padding: 10px 0;
+    }
+    
+    .logo-text {
+        font-size: 22px;
+    }
+    
+    .logo-area {
+        gap: 8px;
+    }
+    
+    .theme-toggle-btn {
+        width: 36px;
+        height: 36px;
+    }
+    
+    .theme-toggle-btn svg {
+        width: 16px;
+        height: 16px;
+    }
+    
+    .admin-btn-icon {
+        flex-shrink: 0;
+    }
+}
+
+@media (max-width: 768px) {
+    /* Hide button texts in header, showing only icons */
+    .app-header .btn-sm span,
+    .app-header .btn-install-pwa span {
+        display: none;
+    }
+    
+    .app-header .btn-sm,
+    .app-header .btn-install-pwa {
+        padding: 0;
+        width: 36px;
+        height: 36px;
+        min-width: 36px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 10px;
+    }
+    
+    /* Reduce header elements gap */
+    .header-right {
+        gap: 8px;
+    }
+    
+    /* Reduce general card padding for tighter fit */
+    .card {
+        padding: 16px !important;
+        border-radius: 16px;
+    }
+    
+    /* Adjust heading spacing and font sizes */
+    .card-title {
+        font-size: 17px;
+    }
+    
+    .metric-title {
+        margin-bottom: 12px;
+    }
+    
+    .section-title {
+        font-size: 15px;
+        margin-bottom: 12px;
+    }
+    
+    /* Make data table fonts and paddings smaller */
+    .data-table th, 
+    .data-table td {
+        padding: 8px 10px;
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 480px) {
+    /* Further container padding reduction */
+    .container {
+        padding: 0 12px;
+    }
+    
+    /* Shrink logo further */
+    .logo-text {
+        font-size: 18px;
+    }
+    
+    .logo-icon {
+        width: 28px;
+        height: 28px;
+    }
+    
+    /* Shrink hero further */
+    .hero-eyebrow {
+        font-size: 10px;
+        padding: 4px 10px;
+        letter-spacing: 1px;
+    }
+    
+    .hero-title {
+        font-size: 24px;
+    }
+    
+    .hero-subtitle {
+        font-size: 13px;
+    }
+    
+    /* Bottom nav height adjustment on very small screens */
+    .mobile-bottom-nav {
+        height: 64px;
+    }
+    
+    .main-content {
+        padding-bottom: 80px;
     }
 }
 
@@ -1967,13 +2082,5 @@ body {
     animation: pwaFadeIn 0.4s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
 }
 
-/* Mobile: show just icon on very small screens */
-@media (max-width: 400px) {
-    .btn-install-pwa span {
-        display: none;
-    }
-    .btn-install-pwa {
-        padding: 8px 10px;
-    }
-}
+/* Mobile: show just icon on very small screens (handled by max-width: 768px) */
 
