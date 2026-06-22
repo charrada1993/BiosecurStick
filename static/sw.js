@@ -8,14 +8,13 @@ const STATIC_CACHE = 'biosecurstick-static-v1';
 const API_CACHE = 'biosecurstick-api-v1';
 
 // Ressources à mettre en cache immédiatement lors de l'installation
+// NOTE: chemins relatifs → fonctionne sur localhost ET sur Render (HTTPS)
 const PRECACHE_URLS = [
   '/',
-  '/login',
   '/static/css/styles.css',
   '/static/js/main.js',
   '/static/manifest.json',
   '/static/icons/icon-512.png',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&display=swap',
 ];
 
 // ── Installation ─────────────────────────────────────────────────
