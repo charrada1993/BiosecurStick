@@ -421,6 +421,70 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => { if (toast.parentNode) toast.remove(); }, duration);
     }
 
+    // ─── IMAGE PRE-PROCESSING FOR OCR ───────────────────────────────────
+    // Upscales, converts to greyscale and boosts contrast so Tesseract /
+    // Google Vision can read small INCI text more accurately.
+    function preprocessImageForOCR(file) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            const objectUrl = URL.createObjectURL(file);
+
+            img.onload = () => {
+                try {
+                    // Scale up small images (min 1600 px wide) for better OCR
+                    const TARGET_WIDTH = 1600;
+                    const scale = img.width < TARGET_WIDTH ? TARGET_WIDTH / img.width : 1;
+                    const w = Math.round(img.width  * scale);
+                    const h = Math.round(img.height * scale);
+
+                    const canvas = document.createElement('canvas');
+                    canvas.width  = w;
+                    canvas.height = h;
+                    const ctx = canvas.getContext('2d');
+
+                    // Draw original image
+                    ctx.drawImage(img, 0, 0, w, h);
+
+                    // Boost contrast & convert to greyscale for cleaner text
+                    const imageData = ctx.getImageData(0, 0, w, h);
+                    const data = imageData.data;
+                    const contrast = 1.4;   // 1.0 = no change, >1 = more contrast
+                    const brightness = 10;  // small brightness lift
+
+                    for (let i = 0; i < data.length; i += 4) {
+                        // Greyscale
+                        const grey = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+                        // Apply contrast & brightness
+                        let val = contrast * (grey - 128) + 128 + brightness;
+                        val = Math.min(255, Math.max(0, val));
+                        data[i] = data[i + 1] = data[i + 2] = val;
+                        // alpha unchanged
+                    }
+                    ctx.putImageData(imageData, 0, 0);
+
+                    canvas.toBlob(blob => {
+                        URL.revokeObjectURL(objectUrl);
+                        if (blob) {
+                            resolve(blob);
+                        } else {
+                            reject(new Error('Échec de la conversion canvas → Blob'));
+                        }
+                    }, 'image/png');
+                } catch (err) {
+                    URL.revokeObjectURL(objectUrl);
+                    reject(err);
+                }
+            };
+
+            img.onerror = () => {
+                URL.revokeObjectURL(objectUrl);
+                reject(new Error('Impossible de charger l\'image pour le prétraitement OCR'));
+            };
+
+            img.src = objectUrl;
+        });
+    }
+
     // ─── Promise-based helper for Tesseract fallbacks ───────────────────
     function runTesseractOCRDirect(processedBlob) {
         return new Promise((resolve, reject) => {
