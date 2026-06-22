@@ -3,10 +3,18 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>BiosecurStick - Analyse & Scoring Biosécurité Déodorants</title>
     <meta name="description"
         content="Évaluez la biosécurité de vos déodorants en temps réel. Analyse toxicologique basée sur la dose systémique d'exposition (SED) et la marge de sécurité (MS) selon les normes du SCCS.">
+    <!-- PWA -->
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#00f5a0">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="BiosecurStick">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-512.png') }}">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -69,6 +77,15 @@
                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
                     </svg>
+                </button>
+                <!-- PWA Install Button -->
+                <button class="btn-install-pwa" id="btnInstallPWA" style="display:none;" aria-label="Installer l'application">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    <span>Installer l'app</span>
                 </button>
             </div>
         </div>
@@ -450,6 +467,68 @@
     </nav>
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+
+    <!-- ===== PWA: Service Worker + Install Prompt ===== -->
+    <script>
+    // ── Register Service Worker ──────────────────────────────────────
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js', { scope: '/' })
+                .then(reg => console.log('[PWA] Service Worker enregistré:', reg.scope))
+                .catch(err => console.warn('[PWA] Erreur SW:', err));
+        });
+    }
+
+    // ── Install Prompt ───────────────────────────────────────────────
+    let deferredPrompt = null;
+    const btnInstall = document.getElementById('btnInstallPWA');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        // Show the install button with animation
+        btnInstall.style.display = 'flex';
+        btnInstall.classList.add('pwa-btn-show');
+    });
+
+    if (btnInstall) {
+        btnInstall.addEventListener('click', async () => {
+            if (!deferredPrompt) return;
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            if (outcome === 'accepted') {
+                btnInstall.style.display = 'none';
+                showToast('✅ Application installée avec succès !', 'success');
+            }
+            deferredPrompt = null;
+        });
+    }
+
+    window.addEventListener('appinstalled', () => {
+        btnInstall.style.display = 'none';
+        deferredPrompt = null;
+        console.log('[PWA] Application installée.');
+    });
+
+    // ── Toast helper (fallback if main.js doesn't have one) ─────────
+    function showToast(msg, type = 'info') {
+        if (typeof window.showNotification === 'function') {
+            window.showNotification(msg, type);
+            return;
+        }
+        const toast = document.createElement('div');
+        toast.textContent = msg;
+        toast.style.cssText = `
+            position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,245,160,0.15); border: 1px solid #00f5a0;
+            color: #00f5a0; padding: 12px 24px; border-radius: 12px;
+            font-family: Inter, sans-serif; font-size: 14px; z-index: 9999;
+            backdrop-filter: blur(12px); animation: fadeInUp 0.3s ease;
+        `;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 4000);
+    }
+    </script>
 </body>
 
 </html>

@@ -879,5 +879,15 @@ def force_sync():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+
+
+@app.route('/sw.js')
+def service_worker():
+    """Serve the PWA service worker from root scope with correct headers."""
+    response = send_from_directory(app.static_folder, 'sw.js')
+    response.headers['Service-Worker-Allowed'] = '/'
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    return response
+
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
