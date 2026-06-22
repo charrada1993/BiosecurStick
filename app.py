@@ -3,6 +3,11 @@ import json
 import re
 import base64
 try:
+    from dotenv import load_dotenv
+    load_dotenv()  # Load .env file (local dev — ignored on Render where env vars are set via dashboard)
+except ImportError:
+    pass
+try:
     from rapidfuzz import process as fuzz_process, fuzz
     RAPIDFUZZ_AVAILABLE = True
 except ImportError:
