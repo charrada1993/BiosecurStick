@@ -3,9 +3,9 @@
    Stratégie : Cache-First pour assets statiques, Network-First pour API
    ================================================================ */
 
-const CACHE_NAME = 'biosecurstick-v2';
-const STATIC_CACHE = 'biosecurstick-static-v2';
-const API_CACHE = 'biosecurstick-api-v2';
+const CACHE_NAME = 'biosecurstick-v3';
+const STATIC_CACHE = 'biosecurstick-static-v3';
+const API_CACHE = 'biosecurstick-api-v3';
 
 // Ressources à mettre en cache immédiatement lors de l'installation
 // NOTE: chemins relatifs → fonctionne sur localhost ET sur Render (HTTPS)

@@ -187,6 +187,8 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 8px;
+    overflow: hidden;
 }
 
 .logo-area {
@@ -194,6 +196,8 @@ body {
     align-items: center;
     gap: 12px;
     cursor: pointer;
+    min-width: 0;
+    flex-shrink: 0;
 }
 
 .logo-icon {
@@ -223,6 +227,7 @@ body {
     display: flex;
     align-items: center;
     gap: 16px;
+    flex-shrink: 0;
 }
 
 .header-tagline {
@@ -929,6 +934,7 @@ body {
 
 .score-ring {
     filter: drop-shadow(0 0 16px rgba(0, 242, 254, 0.25));
+    overflow: visible;
 }
 
 .score-ring-bg {
@@ -1893,6 +1899,22 @@ body {
         padding: 8px 10px;
         font-size: 12px;
     }
+    
+    /* Fix score card layout on mobile */
+    .score-card {
+        padding: 16px;
+    }
+    
+    /* Scale score ring to fit comfortably on mobile screens */
+    .score-circle-container {
+        transform: scale(0.9);
+        transform-origin: center;
+    }
+    
+    /* Prevent btn height style inline overrides from overflowing header */
+    .app-header .btn-sm {
+        height: 36px !important;
+    }
 }
 
 @media (max-width: 480px) {
@@ -1933,6 +1955,17 @@ body {
     
     .main-content {
         padding-bottom: 80px;
+    }
+    
+    /* Scale score ring down further on very small phones */
+    .score-circle-container {
+        transform: scale(0.78);
+        transform-origin: center;
+    }
+    
+    /* Reduce score card padding further */
+    .score-card {
+        padding: 12px;
     }
 }
 
