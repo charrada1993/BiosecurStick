@@ -431,8 +431,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             img.onload = () => {
                 try {
-                    // Scale up small images (min 1600 px wide) for better OCR
-                    const TARGET_WIDTH = 1600;
+                    // Scale up small images (min 1200 px wide) — good balance
+                    // between OCR accuracy and Tesseract.js processing speed.
+                    const TARGET_WIDTH = 1200;
                     const scale = img.width < TARGET_WIDTH ? TARGET_WIDTH / img.width : 1;
                     const w = Math.round(img.width  * scale);
                     const h = Math.round(img.height * scale);
@@ -493,6 +494,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
+            progressStatus.innerText = '🔍 Tesseract : chargement du moteur OCR...';
+            progressBar.style.width = '20%';
+            progressPercent.innerText = '20%';
+
             Tesseract.recognize(
                 processedBlob,
                 'fra+eng',
@@ -500,9 +505,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     tessedit_pageseg_mode: '6',
                     tessedit_ocr_engine_mode: '1',
                     logger: m => {
-                        if (m.status === 'recognizing text') {
-                            const pct = Math.round(m.progress * 100);
-                            progressStatus.innerText = `🔍 Tesseract (moteur local) : ${pct}%`;
+                        if (m.status === 'loading tesseract core') {
+                            progressStatus.innerText = '⏳ Chargement du moteur Tesseract...';
+                            progressBar.style.width = '22%';
+                            progressPercent.innerText = '22%';
+                        } else if (m.status === 'initializing tesseract') {
+                            progressStatus.innerText = '⚙️ Initialisation Tesseract...';
+                            progressBar.style.width = '25%';
+                            progressPercent.innerText = '25%';
+                        } else if (m.status === 'loading language traineddata') {
+                            progressStatus.innerText = '📥 Chargement du modèle de langue...';
+                            progressBar.style.width = '28%';
+                            progressPercent.innerText = '28%';
+                        } else if (m.status === 'recognizing text') {
+                            // Map Tesseract progress (0→1) to bar range 30%→90%
+                            const tessPct = Math.round(m.progress * 100);
+                            const barPct  = 30 + Math.round(m.progress * 60);
+                            progressStatus.innerText = `🔍 Analyse OCR locale : ${tessPct}%`;
+                            progressBar.style.width = `${barPct}%`;
+                            progressPercent.innerText = `${barPct}%`;
                         }
                     }
                 }
@@ -517,14 +538,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const formData = new FormData();
             formData.append('image', processedBlob, filename);
 
+            // 35-second timeout on the Google Vision API call
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 35000);
+
             fetch('/api/ocr', {
                 method: 'POST',
-                body: formData
+                body: formData,
+                signal: controller.signal
             })
             .then(async (response) => {
+                clearTimeout(timeoutId);
                 const data = await response.json();
 
-                // 503 status = Google API Key not set, fallback to local Tesseract
+                // 503 = Google Vision API key not set → fallback to local Tesseract
                 if (response.status === 503) {
                     console.warn('Google Vision API key not set — falling back to Tesseract.js');
                     progressStatus.innerText = '⚙️ Clé Vision absente — Tesseract local activé...';
@@ -541,7 +568,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 resolve(data.text || '');
             })
-            .catch(reject);
+            .catch(err => {
+                clearTimeout(timeoutId);
+                if (err.name === 'AbortError') {
+                    // Timeout → try Tesseract fallback
+                    console.warn('OCR request timed out — falling back to Tesseract.js');
+                    progressStatus.innerText = '⏱️ Délai dépassé — Tesseract local activé...';
+                    runTesseractOCRDirect(processedBlob)
+                        .then(resolve)
+                        .catch(reject);
+                } else {
+                    reject(err);
+                }
+            });
         });
     }
 
