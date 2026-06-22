@@ -3,10 +3,11 @@ import json
 import re
 import base64
 try:
-    from dotenv import load_dotenv
-    load_dotenv()  # Load .env file (local dev — ignored on Render where env vars are set via dashboard)
+    from google.oauth2 import service_account
+    from google.auth.transport.requests import Request as GoogleAuthRequest
+    GOOGLE_AUTH_AVAILABLE = True
 except ImportError:
-    pass
+    GOOGLE_AUTH_AVAILABLE = False
 try:
     from rapidfuzz import process as fuzz_process, fuzz
     RAPIDFUZZ_AVAILABLE = True
@@ -228,23 +229,78 @@ def calculate_ingredient_scoring(ing_name, concentration_str, master_ingredients
 def index():
     return render_template('index.html')
 
-# ── GOOGLE CLOUD VISION OCR ENDPOINT ───────────────────────────────
-# Set GOOGLE_VISION_API_KEY in environment / Render env-vars.
-# Free tier: 1 000 text-detection units/month (more than enough for a demo).
+# ── GOOGLE CLOUD VISION OCR ENDPOINT ──────────────────────────────────
+# Authenticates using a Google Cloud Service Account.
+# Set ONE of the following environment variables:
+#   GOOGLE_APPLICATION_CREDENTIALS_JSON → full JSON content (for Render / cloud)
+#   GOOGLE_APPLICATION_CREDENTIALS       → path to the .json file  (for local)
 GOOGLE_VISION_API_URL = "https://vision.googleapis.com/v1/images:annotate"
+_VISION_SCOPES = ['https://www.googleapis.com/auth/cloud-vision']
+
+
+def _get_vision_access_token():
+    """
+    Returns a short-lived OAuth2 Bearer token for the Vision API,
+    or None if no credentials are configured.
+    """
+    if not GOOGLE_AUTH_AVAILABLE:
+        print("google-auth not installed — OCR unavailable.")
+        return None
+
+    # 1️⃣  Try env var with full JSON content (best for Render cloud env)
+    creds_json_str = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS_JSON', '').strip()
+    if creds_json_str:
+        try:
+            creds_dict = json.loads(creds_json_str)
+            creds = service_account.Credentials.from_service_account_info(
+                creds_dict, scopes=_VISION_SCOPES)
+            creds.refresh(GoogleAuthRequest())
+            return creds.token
+        except Exception as e:
+            print(f"Vision auth error (JSON env var): {e}")
+            return None
+
+    # 2️⃣  Try standard file path env var (local development)
+    creds_file = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', '').strip()
+    if creds_file and os.path.exists(creds_file):
+        try:
+            creds = service_account.Credentials.from_service_account_file(
+                creds_file, scopes=_VISION_SCOPES)
+            creds.refresh(GoogleAuthRequest())
+            return creds.token
+        except Exception as e:
+            print(f"Vision auth error (file path): {e}")
+            return None
+
+    # 3️⃣  Try default JSON file in project root (dev convenience)
+    local_json = os.path.join(os.path.dirname(__file__), 'biosecurstick-500113-d74e8d9bc2fe.json')
+    if os.path.exists(local_json):
+        try:
+            creds = service_account.Credentials.from_service_account_file(
+                local_json, scopes=_VISION_SCOPES)
+            creds.refresh(GoogleAuthRequest())
+            return creds.token
+        except Exception as e:
+            print(f"Vision auth error (local file): {e}")
+            return None
+
+    return None
+
 
 @app.route('/api/ocr', methods=['POST'])
 def ocr_image():
     """
     Receives a JPEG/PNG image upload, sends it to Google Cloud Vision
-    TEXT_DETECTION, and returns the raw extracted text.
-    Falls back with a clear error if the API key is not configured.
+    TEXT_DETECTION using Service Account credentials, and returns the
+    raw extracted text.
+    Falls back with a clear 503 if no credentials are configured so the
+    frontend can switch to Tesseract.js.
     """
-    api_key = os.environ.get('GOOGLE_VISION_API_KEY', '').strip()
-    if not api_key:
+    access_token = _get_vision_access_token()
+    if not access_token:
         return jsonify({
-            'error': 'Google Vision API key non configurée.',
-            'hint':  'Ajoutez GOOGLE_VISION_API_KEY dans les variables d\'environnement Render.',
+            'error': 'Google Vision credentials non configurées.',
+            'hint': 'Définissez GOOGLE_APPLICATION_CREDENTIALS_JSON dans les variables Render.',
             'text': ''
         }), 503
 
@@ -274,13 +330,13 @@ def ocr_image():
         }]
     }
 
-    url = f"{GOOGLE_VISION_API_URL}?key={api_key}"
     req = urllib.request.Request(
-        url,
+        GOOGLE_VISION_API_URL,
         data=json.dumps(payload).encode('utf-8'),
         method='POST'
     )
     req.add_header('Content-Type', 'application/json')
+    req.add_header('Authorization', f'Bearer {access_token}')
 
     try:
         with urllib.request.urlopen(req, timeout=15) as response:

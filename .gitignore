@@ -42,6 +42,9 @@ active_env/
 .DS_Store
 Thumbs.db
 
-# Environment variables (contains secrets — never commit!)
+# Environment secrets — NEVER commit these
 .env
 *.env
+biosecurstick-*.json
+*-service-account*.json
+service_account*.json
