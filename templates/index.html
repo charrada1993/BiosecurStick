@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BiosecurStick - Analyse & Scoring Biosécurité Déodorants</title>
     <meta name="description"
         content="Évaluez la biosécurité de vos déodorants en temps réel. Analyse toxicologique basée sur la dose systémique d'exposition (SED) et la marge de sécurité (MS) selon les normes du SCCS.">
@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&display=swap"
         rel="stylesheet">
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -35,8 +35,8 @@
                         d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" />
                     <defs>
                         <linearGradient id="logo-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" stop-color="#06b6d4" />
-                            <stop offset="100%" stop-color="#3b82f6" />
+                            <stop offset="0%" stop-color="#00f2fe" />
+                            <stop offset="100%" stop-color="#4facfe" />
                         </linearGradient>
                     </defs>
                 </svg>
@@ -77,9 +77,24 @@
     <main class="main-content container">
         <!-- Hero Section with single H1 -->
         <section class="hero-section" id="heroSec">
-            <h1 class="hero-title" id="mainTitle">Analyseur de Biosécurité pour Déodorants</h1>
-            <p class="hero-subtitle">Importez la photo d'un produit ou scannez sa liste d'ingrédients pour calculer
-                instantanément la dose systémique d'exposition (SED) et sa marge de sécurité (MS).</p>
+            <div class="hero-eyebrow">Plateforme d'Analyse Toxicologique · SCCS/1647/22</div>
+            <h1 class="hero-title" id="mainTitle">Analyseur de Biosécurité<br>pour Déodorants</h1>
+            <p class="hero-subtitle">Scannez la liste d'ingrédients INCI d'un déodorant pour calculer instantanément
+                la Dose Systémique d'Exposition (SED) et la Marge de Sécurité (MS).</p>
+            <div class="hero-stats">
+                <div class="hero-stat-pill">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                    <span>20 Produits analysés</span>
+                </div>
+                <div class="hero-stat-pill">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                    <span>Score SED/MS automatique</span>
+                </div>
+                <div class="hero-stat-pill">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zm0 10.5c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z"/></svg>
+                    <span>OCR intégré Google Vision</span>
+                </div>
+            </div>
         </section>
 
         <!-- Main Workspace Grid -->
@@ -408,6 +423,31 @@
                 & CE 1223/2009)</p>
         </div>
     </footer>
+
+    <!-- Bottom Mobile Nav -->
+    <nav class="mobile-bottom-nav" id="mobileBottomNav">
+        <button class="nav-item active" data-tab="scan">
+            <svg viewBox="0 0 24 24" width="20" height="20">
+                <path fill="currentColor" d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zm0 10.5c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z"/>
+            </svg>
+            <span>Scan & Recherche</span>
+        </button>
+        <button class="nav-item" data-tab="ingredients">
+            <div class="nav-icon-wrapper" style="position: relative;">
+                <svg viewBox="0 0 24 24" width="20" height="20">
+                    <path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
+                </svg>
+                <span class="mobile-badge" id="mobileIngredientsCount">0</span>
+            </div>
+            <span>Ingrédients</span>
+        </button>
+        <button class="nav-item" data-tab="results">
+            <svg viewBox="0 0 24 24" width="20" height="20">
+                <path fill="currentColor" d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10H7v-2h10v2zm0-4H7V7h10v2zm0 8H7v-2h10v2z"/>
+            </svg>
+            <span>Rapports</span>
+        </button>
+    </nav>
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>

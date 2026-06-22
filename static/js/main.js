@@ -95,6 +95,43 @@ document.addEventListener('DOMContentLoaded', () => {
     const tabButtons = document.querySelectorAll('.tab-btn');
     const tabPanes = document.querySelectorAll('.tab-pane');
 
+    // Mobile Navigation Elements & Logic
+    const mobileBottomNav = document.getElementById('mobileBottomNav');
+    const navItems = mobileBottomNav ? mobileBottomNav.querySelectorAll('.nav-item') : [];
+    const mobileIngredientsCount = document.getElementById('mobileIngredientsCount');
+
+    function setMobileTab(tabName) {
+        if (!mobileBottomNav) return;
+        navItems.forEach(item => {
+            if (item.getAttribute('data-tab') === tabName) {
+                item.classList.add('active');
+            } else {
+                item.classList.remove('active');
+            }
+        });
+
+        document.body.classList.remove('tab-scan-active', 'tab-ingredients-active', 'tab-results-active');
+        document.body.classList.add(`tab-${tabName}-active`);
+
+        // Handle chart resizing if transitioning to results
+        if (tabName === 'results') {
+            setTimeout(() => {
+                if (dangerChartInst) dangerChartInst.resize();
+                if (scoreChartInst) scoreChartInst.resize();
+                if (benchmarkChartInst) benchmarkChartInst.resize();
+            }, 100);
+        }
+    }
+
+    if (mobileBottomNav) {
+        navItems.forEach(item => {
+            item.addEventListener('click', () => {
+                setMobileTab(item.getAttribute('data-tab'));
+            });
+        });
+        setMobileTab('scan');
+    }
+
     // ─── INITIALIZATION & THEME MANAGER ────────────────────────────
     function applyTheme(theme) {
         document.documentElement.setAttribute('data-theme', theme);
@@ -873,6 +910,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // ── Show results layout ────────────────────────────────────────
         welcomeResultCard.style.display = 'none';
         resultLayout.style.display = 'block';
+        setMobileTab('results');
 
         // ── Score ring ─────────────────────────────────────────────────
         const circumference = 440;
@@ -1073,6 +1111,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderEditorList() {
         editorList.innerHTML = '';
         
+        if (mobileIngredientsCount) {
+            mobileIngredientsCount.innerText = activeIngredients.length;
+            mobileIngredientsCount.style.display = activeIngredients.length > 0 ? 'flex' : 'none';
+        }
+        
         if (activeIngredients.length === 0) {
             editorList.innerHTML = '<div class="no-data-placeholder">Aucun ingrédient en cours d\'évaluation. Sélectionnez un produit ou importez une étiquette.</div>';
             return;
@@ -1144,6 +1187,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Hide welcome screen, show results layout
             welcomeResultCard.style.display = 'none';
             resultLayout.style.display = 'block';
+            setMobileTab('results');
 
             // 1. Update Core Scores & Badge
             const scoreValNum = parseFloat(results.global_score);
